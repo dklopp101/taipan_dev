@@ -1,0 +1,60 @@
+# Ignore log files
+*.log
+
+# Ignore the temp directory
+furstd/
+temp/
+
+# Ignore configuration files
+config.json
+.env
+
+# Ignore all .tmp files in any directory
+*.tmp
+
+# Ignore all json files.
+*.json
+
+# Ignore build directories
+build/
+bin/
+obj/
+Debug/
+Release/
+
+# Ignore Visual Studio specific files
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.user
+*.sdf
+*.suo
+
+# Ignore dependency directories (common for C++ projects)
+packages/
+lib/
+dependencies/
+
+# Ignore Python specific files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+env/
+venv/
+*.egg-info/
+*.whl
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Ignore system files
+Thumbs.db
+.DS_Store
+
+*.txt
+*.fbin
+*.frt
