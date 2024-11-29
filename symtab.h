@@ -21,7 +21,7 @@
 #define NO_SYMBOL    0
 #define LABEL_SYMBOL 1
 #define MACRO_SYMBOL 2
-#define CORE_SYMBOL  3
+#define ATOM_SYMBOL  3
 
 
 static
@@ -30,7 +30,8 @@ symbolTypeStr[] =
 {
 	"no symbol",
 	"label symbol",
-	"macro symbol"
+	"macro symbol",
+	"atom symbol"
 };
 
 // offsets for Symbol() variables relative
@@ -92,7 +93,7 @@ struct SymbolTable
 	void    finalise(u8*     prog_bytestream,
 		             IMForm* imform);
 
-	void    print(bool print_builtins);
+	void    print(bool print_atoms);
 	Value   lookup_symbol_value(const char* _id);
 	Symbol* lookup_symbol(const char* _id);
 	bool    id_inuse(char* _id);

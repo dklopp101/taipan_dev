@@ -899,6 +899,7 @@ Parser() :
 
 	try
 	{
+
 		tokstream = new TokenStream();
 		linevec = new std::vector<char*>();
 	}

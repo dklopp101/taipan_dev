@@ -420,7 +420,6 @@ Assembler
 	void assemble_file();
 	void alloc_bytestream();
 	void reset_all(bool reset_symtab);
-	void runtime_err_handler(std::exception* err);
 	void build_imform_metadata();
 
 	// function used for throwing errors found within the input text.

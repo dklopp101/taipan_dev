@@ -394,7 +394,7 @@ calc_addr_offsets()
 
 void
 SymbolTable::
-print(bool print_builtins = false)
+print(bool print_atoms = false)
 {
 	size_t label_count = 0;
 	size_t macro_count = 0;
@@ -716,11 +716,11 @@ SymbolTable::
 create_builtin_symbols()
 {
 	// metadata built-in macros.
-	create_new_symbol(MACRO_SYMBOL, (char*) "bi_mem_size");
-	create_new_symbol(MACRO_SYMBOL, (char*) "bi_prog_size");
-	create_new_symbol(MACRO_SYMBOL, (char*) "bi_instr_count");
-	create_new_symbol(MACRO_SYMBOL, (char*) "bi_first_instr_addr");
-	create_new_symbol(MACRO_SYMBOL, (char*) "bi_last_instr_addr");
-	create_new_symbol(MACRO_SYMBOL, (char*) "bi_first_user_addr");
-	create_new_symbol(MACRO_SYMBOL, (char*) "bi_symtab_size");
+	create_new_symbol(ATOM_SYMBOL, (char*) "bi_mem_size");
+	create_new_symbol(ATOM_SYMBOL, (char*) "bi_prog_size");
+	create_new_symbol(ATOM_SYMBOL, (char*) "bi_instr_count");
+	create_new_symbol(ATOM_SYMBOL, (char*) "bi_first_instr_addr");
+	create_new_symbol(ATOM_SYMBOL, (char*) "bi_last_instr_addr");
+	create_new_symbol(ATOM_SYMBOL, (char*) "bi_first_user_addr");
+	create_new_symbol(ATOM_SYMBOL, (char*) "bi_symtab_size");
 }

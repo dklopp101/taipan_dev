@@ -255,7 +255,7 @@ InstrBlock(u8 _opcode, size_t _instr_num)
 :
 	opcode(_opcode),
 	instr_num(_instr_num),
-	ram_addr(0)
+ 	ram_addr(0)
 {
 	val        = (Value**) malloc(INSTR_OPR_MAX * sizeof(Value));
 	pos_offset = (Value**) malloc(INSTR_OPR_MAX * sizeof(Value));
@@ -389,7 +389,7 @@ print_program_bytestream(u8* _bytestream)
 	{
 		printf("\n\naddr: %u    :: op: %u (%s)", get_ram_addr(_bytestream, bf), *bf, mnemonic_strings[*bf]);
 		b  += opsize_tbl[*bf];
-		opcode = *bf;
+ 		opcode = *bf;
 		bf += OPCODE_SIZE;
 
 		if (b >= metadata->prog_size)
@@ -397,37 +397,114 @@ print_program_bytestream(u8* _bytestream)
 
 		switch (opcode)
 		{
-		// one uint operand instructions.
-		case nspctr_op: case call_op:  case jmp_op:
-		case je_op:     case jn_op:      case jl_op:    case jg_op:
-		case jls_op:    case jgs_op:     case pshfr_op: case poptr_op:
-		case movtr_op:        case psh_op:
-		case popn_op:
-		case pshfrr_op:
-			printf("\naddr: %u    :: value: %u", get_ram_addr(_bytestream, bf), (*(u32*)bf));
-			bf += UINT_SIZE;
-			continue;
-	
-		// 3 uint operand instructions.
-		case loop_op:
-			printf("\naddr: %u    :: value: %u", get_ram_addr(_bytestream, bf), (*(u32*)bf));
-			bf += UINT_SIZE;
+			// one uint operand instructions.
+			case perr_op:
+			case systime_op:
+			case htime_op:
+			case getutc_op:
+			case getlocal_op:
+			case delay_op:
+			case waituntil_op:
+			case elapsed_op:
+			case getweekday_op:
+			case monthdays_op:
+			case normtime_op:
+			case ftel_op:
+			case rwnd_op:
+			case sputs_op:
+			case sgets_op:
+			case serr_op:
+			case sdup_op:
+			case call_op:
+			case jmp_op:
+			case jz_op:
+			case jnz_op:
+			case je_op:
+			case jn_op:
+			case jl_op:
+			case jg_op:
+			case jls_op:
+			case jgs_op:
+			case pshu_op:
+			case popnu_op:
+			case pshfru_op:
+			case poptru_op:
+			case movtru_op:
+			case stktru_op:
+			case pshi_op:
+			case pshfri_op:
+			case poptri_op:
+			case movtri_op:
+			case stktri_op:
+			case pshr_op:
+			case pshfrr_op:
+			case poptrr_op:
+			case movtrr_op:
+			case stktrr_op:
+			case slen_op:
+			case fcls_op:
+				printf("\naddr: %u    :: value: %u", get_ram_addr(_bytestream, bf), (*(u32*)bf));
+				bf += UINT_SIZE;
+				continue;
 
-			printf("\naddr: %u    :: value: %u", get_ram_addr(_bytestream, bf), (*(u32*)bf));
-			bf += UINT_SIZE;
+				// 3 uint operand instructions.
+			case frd_op:
+			case fwr_op:
+			case fprntf_op:
+			case sprntf_op:
+			case sscnf_op:
+			case mcpy_op:
+			case mmov_op:
+			case sncy_op:
+			case snct_op:
+			case mcmp_op:
+			case sncm_op:
+			case mset_op:
+				printf("\naddr: %u    :: value: %u", get_ram_addr(_bytestream, bf), (*(u32*)bf));
+				bf += UINT_SIZE;
 
-			printf("\naddr: %u    :: value: %u", get_ram_addr(_bytestream, bf), (*(u32*)bf));
-			bf += UINT_SIZE;
-			continue;
+				printf("\naddr: %u    :: value: %u", get_ram_addr(_bytestream, bf), (*(u32*)bf));
+				bf += UINT_SIZE;
 
-		// two uint operand instructions.
-		case stktr_op: case cpyr_op: case setr_op:
-			printf("\naddr: %u    :: value: %u", get_ram_addr(_bytestream, bf), (*(u32*)bf));
-			bf += UINT_SIZE;
+				printf("\naddr: %u    :: value: %u", get_ram_addr(_bytestream, bf), (*(u32*)bf));
+				bf += UINT_SIZE;
+				continue;
 
-			printf("\naddr: %u    :: value: %u", get_ram_addr(_bytestream, bf), (*(u32*)bf));
-			bf += UINT_SIZE;
-			continue;
+				// two uint operand instructions.
+			case timeadd_op:
+			case timesub_op:
+			case settime_op:
+			case tstampstr_op:
+			case cmptime_op:
+			case timediff_op:
+			case fopn_op:
+			case fsk_op:
+			case prntf_op:
+			case scnf_op:
+			case fgts_op:
+			case fpts_op:
+			case scpy_op:
+			case scat_op:
+			case scmp_op:
+			case schr_op:
+			case srch_op:
+			case sstr_op:
+			case stok_op:
+			case sspn_op:
+			case scspn_op:
+			case sfrm_op:
+			case cpyru_op:
+			case setru_op:
+			case cpyri_op:
+			case setri_op:
+			case cpyrr_op:
+			case setrr_op:
+				printf("\naddr: %u    :: value: %u", get_ram_addr(_bytestream, bf), (*(u32*)bf));
+				bf += UINT_SIZE;
+
+				printf("\naddr: %u    :: value: %u", get_ram_addr(_bytestream, bf), (*(u32*)bf));
+				bf += UINT_SIZE;
+				continue;
 		}
 	}
 }
@@ -439,7 +516,7 @@ print_bytestream(u8* _bytestream)
 	print_metadata_bytestream(_bytestream);
 
 	if (symtab && symtab->vec->size())
-		symtab->print(true);
+		symtab->print(false);
 
 	print_program_bytestream(_bytestream);
 }
@@ -489,11 +566,11 @@ write_instrs_to_bytes(u8* buffer)
 	u8* bf = buffer;
 
 	for (u32 i = 0; i < instr_vec->size(); i++)
-	{
-		instr_vec->at(i)->serialise(bf);
+	{ 
+ 		instr_vec->at(i)->serialise(bf);
 		bf += opsize_tbl[instr_vec->at(i)->opcode];
+	//	printf("\n-<<>> %u, opcode: %u", opsize_tbl[instr_vec->at(i)->opcode], instr_vec->at(i)->opcode);
 	}
-
 	instrs_byte_serialised = true;
 }
 
@@ -574,19 +651,71 @@ read_program_from_bytes(u8* _buf)
 
 		switch (instr->opcode)
 		{
-		// one uint operand instructions.
-		case nspctr_op:  case jmp_op: case call_op:
-		case je_op:     case jn_op:      case jl_op:    case jg_op:
-		case jls_op:    case jgs_op:     case pshfr_op: case poptr_op:
-		case movtr_op:  case psh_op:     case popn_op:  case pshfrr_op:
+			// one uint operand instructions.
+		case perr_op:
+		case systime_op:
+		case htime_op:
+		case getutc_op:
+		case getlocal_op:
+		case delay_op:
+		case waituntil_op:
+		case elapsed_op:
+		case getweekday_op:
+		case monthdays_op:
+		case normtime_op:
+		case ftel_op:
+		case rwnd_op:
+		case sputs_op:
+		case sgets_op:
+		case serr_op:
+		case sdup_op:
+		case call_op:
+		case jmp_op:
+		case jz_op:
+		case jnz_op:
+		case je_op:
+		case jn_op:
+		case jl_op:
+		case jg_op:
+		case jls_op:
+		case jgs_op:
+		case pshu_op:
+		case popnu_op:
+		case pshfru_op:
+		case poptru_op:
+		case movtru_op:
+		case stktru_op:
+		case pshi_op:
+		case pshfri_op:
+		case poptri_op:
+		case movtri_op:
+		case stktri_op:
+		case pshr_op:
+		case pshfrr_op:
+		case poptrr_op:
+		case movtrr_op:
+		case stktrr_op:
+		case slen_op:
+		case fcls_op:
 			(*(instr->val) + 1)->uintval = (u32)(*(u32*)bf);
 			instr->val_type[1] = UINT_TYPE;
 			addr += UINT_SIZE;
 			bf += UINT_SIZE;
 			continue;
 
-		// three uint operand instructions.
-		case loop_op:
+			// three uint operand instructions.
+		case frd_op:
+		case fwr_op:
+		case fprntf_op:
+		case sprntf_op:
+		case sscnf_op:
+		case mcpy_op:
+		case mmov_op:
+		case sncy_op:
+		case snct_op:
+		case mcmp_op:
+		case sncm_op:
+		case mset_op:
 			(*(instr->val) + 1)->uintval = (u32)(*(u32*)bf);
 			instr->val_type[1] = UINT_TYPE;
 			addr += UINT_SIZE;
@@ -603,10 +732,35 @@ read_program_from_bytes(u8* _buf)
 			bf += UINT_SIZE;
 			continue;
 
-		// two uint operand instructions.
-		case stktr_op:
-		case cpyr_op:
-		case setr_op:
+			// two uint operand instructions.
+		case timeadd_op:
+		case timesub_op:
+		case settime_op:
+		case tstampstr_op:
+		case cmptime_op:
+		case timediff_op:
+		case fopn_op:
+		case fsk_op:
+		case prntf_op:
+		case scnf_op:
+		case fgts_op:
+		case fpts_op:
+		case scpy_op:
+		case scat_op:
+		case scmp_op:
+		case schr_op:
+		case srch_op:
+		case sstr_op:
+		case stok_op:
+		case sspn_op:
+		case scspn_op:
+		case sfrm_op:
+		case cpyru_op:
+		case setru_op:
+		case cpyri_op:
+		case setri_op:
+		case cpyrr_op:
+		case setrr_op:
 			(*(instr->val) + 1)->uintval = (u32)(*(u32*)bf);
 			instr->val_type[1] = UINT_TYPE;
 			addr += UINT_SIZE;
@@ -618,18 +772,49 @@ read_program_from_bytes(u8* _buf)
 			bf += UINT_SIZE;
 			continue;
 
-		// no operand instructions.
-		case die_op:    case nop_op:   case test_die_op: case ret_op:
-		case swtch_op:  case lbrk_op:  case pop_op:      case pop2_op:
-		case inc_op:    case dec_op:   case add_op:      case sub_op:
-		case mul_op:    case div_op:   case mod_op:      case incs_op:
-		case decs_op:   case adds_op:  case subs_op:     case muls_op:
-		case divs_op:   case mods_op:  case and_op:      case not_op:
-		case xor_op:    case or_op:    case lshft_op:    case rshft_op:
-		case lrot_op:   case rrot_op:  case ands_op:     case nots_op:
-		case xors_op:   case ors_op:   case lshfts_op:   case rshfts_op:
-		case lrots_op:  case rrots_op: case brkp_op:     case lcont_op:
-		case pshfrs_op: case nspctst_op:
+			// no operand instructions.
+		case die_op:
+		case nop_op:
+		case stopprof_op:
+		case startprof_op:
+		case brkp_op:
+		case nspctr_op:
+		case ret_op:
+		case swtch_op:
+		case popu_op:
+		case pop2u_op:
+		case incu_op:
+		case decu_op:
+		case addu_op:
+		case subu_op:
+		case mulu_op:
+		case divu_op:
+		case modu_op:
+		case inci_op:
+		case deci_op:
+		case addi_op:
+		case subi_op:
+		case muli_op:
+		case divi_op:
+		case modi_op:
+		case addr_op:
+		case subr_op:
+		case mulr_op:
+		case divr_op:
+		case modr_op:
+		case sqrt_op:
+		case ceil_op:
+		case floor_op:
+		case sin_op:
+		case cos_op:
+		case tan_op:
+		case powu_op:
+		case pows_op:
+		case powr_op:
+		case absu_op:
+		case abss_op:
+		case absr_op:
+		case fabs_op:
 			continue;
 
 			// default:
@@ -694,7 +879,9 @@ Assembler::
 throw_error_here(Token*      token,
 	             const char* errmsg)
 {
-	throw inputTextError(token->line, token->col, parser->linevec->at(token->line), errmsg);
+	printf("\n ERROR HERE");
+	exit(1);
+	//throw inputTextError(token->line, token->col, parser->linevec->at(token->line), errmsg);
 }
 
 // doesn't check tokens exactly but will catch some errors.
@@ -860,41 +1047,149 @@ first_stage_pass()
 				switch (currtok->val.ubyteval)
 				{
 					// one uint operand instructions.
-					case nspctr_op: case call_op:    case jmp_op:
-					case je_op:     case jn_op:      case jl_op:    case jg_op:
-					case jls_op:    case jgs_op:     case pshfr_op: case poptr_op:
-					case movtr_op:  case psh_op:     case popn_op:  case pshfrr_op:
-						count_uint_operand();
-						continue;
+				case perr_op:
+				case systime_op:
+				case htime_op:
+				case getutc_op:
+				case getlocal_op:
+				case delay_op:
+				case waituntil_op:
+				case elapsed_op:
+				case getweekday_op:
+				case monthdays_op:
+				case normtime_op:
+				case ftel_op:
+				case rwnd_op:
+				case sputs_op:
+				case sgets_op:
+				case serr_op:
+				case sdup_op:
+				case call_op:
+				case jmp_op:
+				case jz_op:
+				case jnz_op:
+				case je_op:
+				case jn_op:
+				case jl_op:
+				case jg_op:
+				case jls_op:
+				case jgs_op:
+				case pshu_op:
+				case popnu_op:
+				case pshfru_op:
+				case poptru_op:
+				case movtru_op:
+				case stktru_op:
+				case pshi_op:
+				case pshfri_op:
+				case poptri_op:
+				case movtri_op:
+				case stktri_op:
+				case pshr_op:
+				case pshfrr_op:
+				case poptrr_op:
+				case movtrr_op:
+				case stktrr_op:
+				case slen_op:
+				case fcls_op:
+					count_uint_operand();
+					continue;
 
 					// three uint operand instructions.
-					case loop_op:
-						count_uint_operand();
-						count_uint_operand();
-						count_uint_operand();
-						continue;
+				case frd_op:
+				case fwr_op:
+				case fprntf_op:
+				case sprntf_op:
+				case sscnf_op:
+				case mcpy_op:
+				case mmov_op:
+				case sncy_op:
+				case snct_op:
+				case mcmp_op:
+				case sncm_op:
+				case mset_op:
+					count_uint_operand();
+					count_uint_operand();
+					count_uint_operand();
+					continue;
 
 					// two uint operand instructions.
-					case stktr_op:
-					case cpyr_op:
-					case setr_op:
-						count_uint_operand();
-						count_uint_operand();
-						continue;
+				case timeadd_op:
+				case timesub_op:
+				case settime_op:
+				case tstampstr_op:
+				case cmptime_op:
+				case timediff_op:
+				case fopn_op:
+				case fsk_op:
+				case prntf_op:
+				case scnf_op:
+				case fgts_op:
+				case fpts_op:
+				case scpy_op:
+				case scat_op:
+				case scmp_op:
+				case schr_op:
+				case srch_op:
+				case sstr_op:
+				case stok_op:
+				case sspn_op:
+				case scspn_op:
+				case sfrm_op:
+				case cpyru_op:
+				case setru_op:
+				case cpyri_op:
+				case setri_op:
+				case cpyrr_op:
+				case setrr_op:
+					count_uint_operand();
+					count_uint_operand();
+					continue;
 
 					// no operand instructions.
-					case die_op:    case nop_op:   case test_die_op: case ret_op:
-					case swtch_op:  case lbrk_op:  case pop_op:      case pop2_op:
-					case inc_op:    case dec_op:   case add_op:      case sub_op:
-					case mul_op:    case div_op:   case mod_op:      case incs_op:
-					case decs_op:   case adds_op:  case subs_op:     case muls_op:
-					case divs_op:   case mods_op:  case and_op:      case not_op:
-					case xor_op:    case or_op:    case lshft_op:    case rshft_op:
-					case lrot_op:   case rrot_op:  case ands_op:     case nots_op:
-					case xors_op:   case ors_op:   case lshfts_op:   case rshfts_op:
-					case lrots_op:  case rrots_op: case brkp_op:     case lcont_op:
-					case pshfrs_op: case nspctst_op:
-						continue;
+				case die_op:
+				case nop_op:
+				case stopprof_op:
+				case startprof_op:
+				case brkp_op:
+				case nspctr_op:
+				case ret_op:
+				case swtch_op:
+				case popu_op:
+				case pop2u_op:
+				case incu_op:
+				case decu_op:
+				case addu_op:
+				case subu_op:
+				case mulu_op:
+				case divu_op:
+				case modu_op:
+				case inci_op:
+				case deci_op:
+				case addi_op:
+				case subi_op:
+				case muli_op:
+				case divi_op:
+				case modi_op:
+				case addr_op:
+				case subr_op:
+				case mulr_op:
+				case divr_op:
+				case modr_op:
+				case sqrt_op:
+				case ceil_op:
+				case floor_op:
+				case sin_op:
+				case cos_op:
+				case tan_op:
+				case powu_op:
+				case pows_op:
+				case powr_op:
+				case absu_op:
+				case abss_op:
+				case absr_op:
+				case fabs_op:
+					continue;
 				}
 
 			case MACRO_DEF_TOK:
@@ -1128,8 +1423,8 @@ resolve_uint_operand(InstrBlock* instr,
 
 		// confirm this is not the last token in the stream if so we have an error,
 		// a missing expr ending token.
-		if ((asmobj->currtok->ndx) == ((asmobj->parser->tokcount) - 1))
-			asmobj->throw_error_here(asmobj->currtok, "misformed expression");
+		//if ((asmobj->currtok->ndx) == ((asmobj->parser->tokcount) - 1))
+		//	asmobj->throw_error_here(asmobj->currtok, "misformed expression");
 
 		switch (asmobj->currtok->type)
 		{
@@ -1552,44 +1847,152 @@ build_im_form()
 				switch (currtok->val.ubyteval)
 				{
 					// one uint operand instructions.
-					case nspctr_op:  case jmp_op: case call_op:
-					case je_op:     case jn_op:      case jl_op:    case jg_op:
-					case jls_op:    case jgs_op:     case pshfr_op: case poptr_op:
-					case movtr_op:  case psh_op:     case popn_op:  case pshfrr_op:
-						resolver->resolve_uint_operand(instr, 1);
-						break;
+				case perr_op:
+				case systime_op:
+				case htime_op:
+				case getutc_op:
+				case getlocal_op:
+				case delay_op:
+				case waituntil_op:
+				case elapsed_op:
+				case getweekday_op:
+				case monthdays_op:
+				case normtime_op:
+				case ftel_op:
+				case rwnd_op:
+				case sputs_op:
+				case sgets_op:
+				case serr_op:
+				case sdup_op:
+				case call_op:
+				case jmp_op:
+				case jz_op:
+				case jnz_op:
+				case je_op:
+				case jn_op:
+				case jl_op:
+				case jg_op:
+				case jls_op:
+				case jgs_op:
+				case pshu_op:
+				case popnu_op:
+				case pshfru_op:
+				case poptru_op:
+				case movtru_op:
+				case stktru_op:
+				case pshi_op:
+				case pshfri_op:
+				case poptri_op:
+				case movtri_op:
+				case stktri_op:
+				case pshr_op:
+				case pshfrr_op:
+				case poptrr_op:
+				case movtrr_op:
+				case stktrr_op:
+				case slen_op:
+				case fcls_op:
+					resolver->resolve_uint_operand(instr, 1);
+					break;
 
-						// three uint operand instructions.
-					case loop_op:
-						resolver->resolve_uint_operand(instr, 1);
-						toknum--;
-						resolver->resolve_uint_operand(instr, 2);
-						toknum--;
-						resolver->resolve_uint_operand(instr, 3);
-						break;
+					// three uint operand instructions.
+				case frd_op:
+				case fwr_op:
+				case fprntf_op:
+				case sprntf_op:
+				case sscnf_op:
+				case mcpy_op:
+				case mmov_op:
+				case sncy_op:
+				case snct_op:
+				case mcmp_op:
+				case sncm_op:
+				case mset_op:
+					resolver->resolve_uint_operand(instr, 1);
+					toknum--;
+					resolver->resolve_uint_operand(instr, 2);
+					toknum--;
+					resolver->resolve_uint_operand(instr, 3);
+					break;
 
-						// two uint operand instructions.
-					case stktr_op:
-					case cpyr_op:
-					case setr_op:
-						resolver->resolve_uint_operand(instr, 1);
-						resolver->resolve_uint_operand(instr, 2);
-						break;
+					// two uint operand instructions.
+				case timeadd_op:
+				case timesub_op:
+				case settime_op:
+				case tstampstr_op:
+				case cmptime_op:
+				case timediff_op:
+				case fopn_op:
+				case fsk_op:
+				case prntf_op:
+				case scnf_op:
+				case fgts_op:
+				case fpts_op:
+				case scpy_op:
+				case scat_op:
+				case scmp_op:
+				case schr_op:
+				case srch_op:
+				case sstr_op:
+				case stok_op:
+				case sspn_op:
+				case scspn_op:
+				case sfrm_op:
+				case cpyru_op:
+				case setru_op:
+				case cpyri_op:
+				case setri_op:
+				case cpyrr_op:
+				case setrr_op:
+					resolver->resolve_uint_operand(instr, 1);
+					resolver->resolve_uint_operand(instr, 2);
+					break;
 
-						// no operand instructions.
-					case die_op:    case nop_op:   case test_die_op: case ret_op:
-					case swtch_op:  case lbrk_op:  case pop_op:      case pop2_op:
-					case inc_op:    case dec_op:   case add_op:      case sub_op:
-					case mul_op:    case div_op:   case mod_op:      case incs_op:
-					case decs_op:   case adds_op:  case subs_op:     case muls_op:
-					case divs_op:   case mods_op:  case and_op:      case not_op:
-					case xor_op:    case or_op:    case lshft_op:    case rshft_op:
-					case lrot_op:   case rrot_op:  case ands_op:     case nots_op:
-					case xors_op:   case ors_op:   case lshfts_op:   case rshfts_op:
-					case lrots_op:  case rrots_op: case brkp_op:     case lcont_op:
-					case pshfrs_op: case nspctst_op:
-						++toknum; // make sure toknum is pointing at the next token.
-						break;
+					// no operand instructions.
+				case die_op:
+				case nop_op:
+				case stopprof_op:
+				case startprof_op:
+				case brkp_op:
+				case nspctr_op:
+				case ret_op:
+				case swtch_op:
+				case popu_op:
+				case pop2u_op:
+				case incu_op:
+				case decu_op:
+				case addu_op:
+				case subu_op:
+				case mulu_op:
+				case divu_op:
+				case modu_op:
+				case inci_op:
+				case deci_op:
+				case addi_op:
+				case subi_op:
+				case muli_op:
+				case divi_op:
+				case modi_op:
+				case addr_op:
+				case subr_op:
+				case mulr_op:
+				case divr_op:
+				case modr_op:
+				case sqrt_op:
+				case ceil_op:
+				case floor_op:
+				case sin_op:
+				case cos_op:
+				case tan_op:
+				case powu_op:
+				case pows_op:
+				case powr_op:
+				case absu_op:
+				case abss_op:
+				case absr_op:
+				case fabs_op:
+					++toknum; // make sure toknum is pointing at the next token.
+					break;
 				}
 
 				continue;
@@ -1690,41 +2093,149 @@ serialise(u8* buff_)
 	switch (opcode)
 	{
 		// one uint operand instructions.
-		case nspctr_op: case call_op:    case jmp_op:
-		case je_op:     case jn_op:      case jl_op:    case jg_op:
-		case jls_op:    case jgs_op:     case pshfr_op: case poptr_op:
-		case movtr_op:  case psh_op:     case popn_op:  case pshfrr_op:
-			write_operand(UINT_TYPE, 1, buff_);
-			break;
+	case perr_op:
+	case systime_op:
+	case htime_op:
+	case getutc_op:
+	case getlocal_op:
+	case delay_op:
+	case waituntil_op:
+	case elapsed_op:
+	case getweekday_op:
+	case monthdays_op:
+	case normtime_op:
+	case ftel_op:
+	case rwnd_op:
+	case sputs_op:
+	case sgets_op:
+	case serr_op:
+	case sdup_op:
+	case call_op:
+	case jmp_op:
+	case jz_op:
+	case jnz_op:
+	case je_op:
+	case jn_op:
+	case jl_op:
+	case jg_op:
+	case jls_op:
+	case jgs_op:
+	case pshu_op:
+	case popnu_op:
+	case pshfru_op:
+	case poptru_op:
+	case movtru_op:
+	case stktru_op:
+	case pshi_op:
+	case pshfri_op:
+	case poptri_op:
+	case movtri_op:
+	case stktri_op:
+	case pshr_op:
+	case pshfrr_op:
+	case poptrr_op:
+	case movtrr_op:
+	case stktrr_op:
+	case slen_op:
+	case fcls_op:
+		write_operand(UINT_TYPE, 1, buff_);
+		break;
 
 		// three uint operand instructions.
-		case loop_op:
-			write_operand(UINT_TYPE, 1, buff_);
-			write_operand(UINT_TYPE, 2, buff_);
-			write_operand(UINT_TYPE, 3, buff_);
-			break;
+	case frd_op:
+	case fwr_op:
+	case fprntf_op:
+	case sprntf_op:
+	case sscnf_op:
+	case mcpy_op:
+	case mmov_op:
+	case sncy_op:
+	case snct_op:
+	case mcmp_op:
+	case sncm_op:
+	case mset_op:
+		write_operand(UINT_TYPE, 1, buff_);
+		write_operand(UINT_TYPE, 2, buff_);
+		write_operand(UINT_TYPE, 3, buff_);
+		break;
 
 		// two uint operand instructions.
-		case stktr_op:
-		case cpyr_op:
-		case setr_op:
-			write_operand(UINT_TYPE, 1, buff_);
-			write_operand(UINT_TYPE, 2, buff_);
-			break;
+	case timeadd_op:
+	case timesub_op:
+	case settime_op:
+	case tstampstr_op:
+	case cmptime_op:
+	case timediff_op:
+	case fopn_op:
+	case fsk_op:
+	case prntf_op:
+	case scnf_op:
+	case fgts_op:
+	case fpts_op:
+	case scpy_op:
+	case scat_op:
+	case scmp_op:
+	case schr_op:
+	case srch_op:
+	case sstr_op:
+	case stok_op:
+	case sspn_op:
+	case scspn_op:
+	case sfrm_op:
+	case cpyru_op:
+	case setru_op:
+	case cpyri_op:
+	case setri_op:
+	case cpyrr_op:
+	case setrr_op:
+		write_operand(UINT_TYPE, 1, buff_);
+		write_operand(UINT_TYPE, 2, buff_);
+		break;
 
-			// no operand instructions.
-		case die_op:    case nop_op:   case test_die_op: case ret_op:
-		case swtch_op:  case lbrk_op:  case pop_op:      case pop2_op:
-		case inc_op:    case dec_op:   case add_op:      case sub_op:
-		case mul_op:    case div_op:   case mod_op:      case incs_op:
-		case decs_op:   case adds_op:  case subs_op:     case muls_op:
-		case divs_op:   case mods_op:  case and_op:      case not_op:
-		case xor_op:    case or_op:    case lshft_op:    case rshft_op:
-		case lrot_op:   case rrot_op:  case ands_op:     case nots_op:
-		case xors_op:   case ors_op:   case lshfts_op:   case rshfts_op:
-		case lrots_op:  case rrots_op: case brkp_op:     case lcont_op:
-		case pshfrs_op: case nspctst_op:
-			break;
+		// no operand instructions.
+	case die_op:
+	case nop_op:
+	case stopprof_op:
+	case startprof_op:
+	case brkp_op:
+	case nspctr_op:
+	case ret_op:
+	case swtch_op:
+	case popu_op:
+	case pop2u_op:
+	case incu_op:
+	case decu_op:
+	case addu_op:
+	case subu_op:
+	case mulu_op:
+	case divu_op:
+	case modu_op:
+	case inci_op:
+	case deci_op:
+	case addi_op:
+	case subi_op:
+	case muli_op:
+	case divi_op:
+	case modi_op:
+	case addr_op:
+	case subr_op:
+	case mulr_op:
+	case divr_op:
+	case modr_op:
+	case sqrt_op:
+	case ceil_op:
+	case floor_op:
+	case sin_op:
+	case cos_op:
+	case tan_op:
+	case powu_op:
+	case pows_op:
+	case powr_op:
+	case absu_op:
+	case abss_op:
+	case absr_op:
+	case fabs_op:
+		break;
 	}
 }
 
@@ -1926,7 +2437,7 @@ assemble_file()
 
 	// build intermediate-form which is a vector of instr-block objects.
 	// these objects hold the final information to write an instr to a bytestream.
-	build_im_form();
+ 	build_im_form();
 
 	// serialise im form to prog-bytestream as per the .fbin memory map.
 	imform->write_prog_to_bytes(prog_bytestream);
@@ -2287,12 +2798,51 @@ print_prog_bytestream(u8* bytestream,
 		switch (*bsptr)
 		{
 			// one uint operand instructions.
-		case nspctr_op: case call_op:  case jmp_op:
-		case je_op:     case jn_op:      case jl_op:    case jg_op:
-		case jls_op:    case jgs_op:     case pshfr_op: case poptr_op:
-		case movtr_op:        case psh_op:
-		case popn_op:
+		case perr_op:
+		case systime_op:
+		case htime_op:
+		case getutc_op:
+		case getlocal_op:
+		case delay_op:
+		case waituntil_op:
+		case elapsed_op:
+		case getweekday_op:
+		case monthdays_op:
+		case normtime_op:
+		case ftel_op:
+		case rwnd_op:
+		case sputs_op:
+		case sgets_op:
+		case serr_op:
+		case sdup_op:
+		case call_op:
+		case jmp_op:
+		case jz_op:
+		case jnz_op:
+		case je_op:
+		case jn_op:
+		case jl_op:
+		case jg_op:
+		case jls_op:
+		case jgs_op:
+		case pshu_op:
+		case popnu_op:
+		case pshfru_op:
+		case poptru_op:
+		case movtru_op:
+		case stktru_op:
+		case pshi_op:
+		case pshfri_op:
+		case poptri_op:
+		case movtri_op:
+		case stktri_op:
+		case pshr_op:
 		case pshfrr_op:
+		case poptrr_op:
+		case movtrr_op:
+		case stktrr_op:
+		case slen_op:
+		case fcls_op:
 			bsptr += 4;
 			addr += 4;
 			u32p = (u32*)bsptr;
@@ -2302,7 +2852,18 @@ print_prog_bytestream(u8* bytestream,
 
 			continue;
 
-		case loop_op:
+		case frd_op:
+		case fwr_op:
+		case fprntf_op:
+		case sprntf_op:
+		case sscnf_op:
+		case mcpy_op:
+		case mmov_op:
+		case sncy_op:
+		case snct_op:
+		case mcmp_op:
+		case sncm_op:
+		case mset_op:
 			bsptr += 4;
 			addr += 4;
 			for (int i = 0; i < 3; i++)
@@ -2315,7 +2876,34 @@ print_prog_bytestream(u8* bytestream,
 			continue;
 
 			// two uint operand instructions.
-		case stktr_op: case cpyr_op: case setr_op:
+		case timeadd_op:
+		case timesub_op:
+		case settime_op:
+		case tstampstr_op:
+		case cmptime_op:
+		case timediff_op:
+		case fopn_op:
+		case fsk_op:
+		case prntf_op:
+		case scnf_op:
+		case fgts_op:
+		case fpts_op:
+		case scpy_op:
+		case scat_op:
+		case scmp_op:
+		case schr_op:
+		case srch_op:
+		case sstr_op:
+		case stok_op:
+		case sspn_op:
+		case scspn_op:
+		case sfrm_op:
+		case cpyru_op:
+		case setru_op:
+		case cpyri_op:
+		case setri_op:
+		case cpyrr_op:
+		case setrr_op:
 			bsptr += 4;
 			addr += 4;
 			for (int i = 0; i < 2; i++)
@@ -2327,17 +2915,48 @@ print_prog_bytestream(u8* bytestream,
 			continue;
 
 			// no operand instructions.
-		case die_op:    case nop_op:   case test_die_op: case ret_op:
-		case swtch_op:  case lbrk_op:  case pop_op:      case pop2_op:
-		case inc_op:    case dec_op:   case add_op:      case sub_op:
-		case mul_op:    case div_op:   case mod_op:      case incs_op:
-		case decs_op:   case adds_op:  case subs_op:     case muls_op:
-		case divs_op:   case mods_op:  case and_op:      case not_op:
-		case xor_op:    case or_op:    case lshft_op:    case rshft_op:
-		case lrot_op:   case rrot_op:  case ands_op:     case nots_op:
-		case xors_op:   case ors_op:   case lshfts_op:   case rshfts_op:
-		case lrots_op:  case rrots_op: case brkp_op:     case lcont_op:
-		case pshfrs_op: case nspctst_op:
+		case die_op:
+		case nop_op:
+		case stopprof_op:
+		case startprof_op:
+		case brkp_op:
+		case nspctr_op:
+		case ret_op:
+		case swtch_op:
+		case popu_op:
+		case pop2u_op:
+		case incu_op:
+		case decu_op:
+		case addu_op:
+		case subu_op:
+		case mulu_op:
+		case divu_op:
+		case modu_op:
+		case inci_op:
+		case deci_op:
+		case addi_op:
+		case subi_op:
+		case muli_op:
+		case divi_op:
+		case modi_op:
+		case addr_op:
+		case subr_op:
+		case mulr_op:
+		case divr_op:
+		case modr_op:
+		case sqrt_op:
+		case ceil_op:
+		case floor_op:
+		case sin_op:
+		case cos_op:
+		case tan_op:
+		case powu_op:
+		case pows_op:
+		case powr_op:
+		case absu_op:
+		case abss_op:
+		case absr_op:
+		case fabs_op:
 			bsptr += 4;
 			addr += 4;
 			continue;
