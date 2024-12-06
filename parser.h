@@ -147,44 +147,47 @@ ParserError
 #define STRING_DELIM           '"'
 #define LABEL_DEF_SUFFIX       ':'
 #define START_LABEL_ID         "main"
-#define MACRO_DEF_KEYWORD      "macro"
+#define MACRO_DEF_KEYWORD      "let"
+#define IMPORT_DEF_KEYWORD     "import"
 
 // token type codes.
-#define NO_TOK          0
-#define SIGNED_TOK      1
-#define UNSIGNED_TOK    2 // these top 3 tokens are only used by the parser itself. 
+#define NO_TOK           0
+#define SIGNED_TOK       1
+#define UNSIGNED_TOK     2 // these top 3 tokens are only used by the parser itself. 
 
-#define OPCODE_TOK      3
-#define MACRO_DEF_TOK   4
-#define LABEL_DEF_TOK   5
-#define OCT_TOK         6
-#define HEX_TOK         7
-#define UOCT_TOK        8
-#define UHEX_TOK        9
-#define UINT_TOK       10
-#define INT_TOK        11
-#define UBYTE_TOK      12
-#define REAL_TOK       13
-#define UREAL_TOK      14
-#define ADDR_TOK       15
-#define ID_TOK         16
-#define STRING_TOK     17
-#define COMMENT_TOK    18
-#define BRKPNT_TOK     19
-#define ADDOP_TOK      43
-#define SUBOP_TOK      45
-#define MULOP_TOK      42
-#define DIVOP_TOK      47
-#define MODOP_TOK      37
-#define LBRKTOP_TOK    91
-#define RBRKTOP_TOK    93
-#define LPRN_TOK       40
-#define RPRN_TOK       41
-#define EXPREND_TOK   100
+#define OPCODE_TOK       3
+#define MACRO_DEF_TOK    4
+#define LABEL_DEF_TOK    5
+#define OCT_TOK          6
+#define HEX_TOK          7
+#define UOCT_TOK         8
+#define UHEX_TOK         9
+#define UINT_TOK        10
+#define INT_TOK         11
+#define UBYTE_TOK       12
+#define REAL_TOK        13
+#define UREAL_TOK       14
+#define ADDR_TOK        15
+#define ID_TOK          16
+#define STRING_TOK      17
+#define COMMENT_TOK     18
+#define BRKPNT_TOK      19
+#define ADDOP_TOK       43
+#define SUBOP_TOK       45
+#define MULOP_TOK       42
+#define DIVOP_TOK       47
+#define MODOP_TOK       37
+#define LBRKTOP_TOK     91
+#define RBRKTOP_TOK     93
+#define LPRN_TOK        40
+#define RPRN_TOK        41
+#define EXPREND_TOK    100
+#define IMPORT_DEF_TOK 101
+#define PATH_TOK       102
 
 #define OPERATOR_COUNT 10
 #define ASMERR_MSG_BUFSIZE 300
-
+#define MIN_PATH_LEN 2
 struct
 NodePrecedence
 {
@@ -285,7 +288,8 @@ toktype_mnemonics[] = {
 	"", // 92
 	"r-bracket op token", // 93
 	"", "", "", "", "", "",
-	"expr-end op token" // 100
+	"expr-end op token", // 100
+	"import-def token"
 };
 
 struct

@@ -250,6 +250,24 @@ apply_offset(const u8 datatype,
 	}
 }
 
+InstrBlock*
+InstrBlock::
+make_clone()
+{
+	InstrBlock* ret_instr = new InstrBlock(opcode, instr_num);
+	ret_instr->ram_addr = ram_addr;
+
+	for (u32 i = 0; i < INSTR_OPR_MAX; i++)
+	{
+		ret_instr->val_type[i]   = val_type[i];
+		ret_instr->val[i]        = val[i];
+		ret_instr->pos_offset[i] = pos_offset[i];
+		ret_instr->neg_offset[i] = neg_offset[i];
+	}
+
+	return ret_instr;
+}
+
 InstrBlock::
 InstrBlock(u8 _opcode, size_t _instr_num)
 :
@@ -303,13 +321,15 @@ IMForm()
 		bytestream_size(0),
 		input_path(NULL),
 		output_path(NULL),
-		prog_bytestream(0),
+		prog_bytestream(NULL),
 	    mdata_byte_serialised(false),
 	    instrs_byte_serialised(false),
 	    symtab_byte_serialised(true),
 		symtab(NULL),
 		symbols_kept(false),
-	    imform_file_written(false)
+	    imform_file_written(false),
+		in_fdata(NULL),
+	    ibvec_changed(false)
 {
 	try
 	{
@@ -332,6 +352,133 @@ IMForm::
 	delete symtab;
 	delete metadata;
 }
+
+void
+IMForm::
+build_infdata(char* _path)
+{
+	try
+	{
+		in_fdata = new moduleFileData(_path);
+	}
+
+	catch (const std::bad_alloc& e)
+	{
+		throw AssemblerError("\nnew failed in IMForm::build_fdata()\n[fdata = new moduleFileData(_path);]");
+	}
+}
+
+IMForm*
+IMForm:: // ON KILL LIST!! NOT NEEDED.
+make_clone()
+{
+	IMForm* ret_imform = new IMForm();
+	InstrBlock* clone_instr;
+
+	// clone metadata.
+	ret_imform->metadata->start_instr_addr = metadata->start_instr_addr;
+	ret_imform->metadata->mem_size = metadata->mem_size;
+	ret_imform->metadata->prog_size = metadata->prog_size;
+	ret_imform->metadata->instr_count = metadata->instr_count;
+	ret_imform->metadata->first_instr_addr = metadata->first_instr_addr;
+	ret_imform->metadata->last_instr_addr = metadata->last_instr_addr;
+	ret_imform->metadata->first_user_byte_addr = metadata->first_user_byte_addr;
+	ret_imform->metadata->flags = metadata->flags;
+	ret_imform->metadata->creation_date = metadata->creation_date;
+	ret_imform->metadata->symtab_size = metadata->symtab_size;
+
+	// clone instruction blocks.
+	for (u32 i = 0; i < instr_vec->size(); i++)
+	{
+		clone_instr = instr_vec->at(i)->make_clone();
+		ret_imform->instr_vec->push_back(clone_instr);
+	}
+
+	// clone input/output paths.
+	if (input_path)
+	{
+		size_t input_path_len = strlen(input_path);
+		if (input_path_len)
+		{
+			ret_imform->input_path = (char*)malloc(input_path_len);
+
+			if (!ret_imform->input_path)
+			{
+				// HANDLE ERROR
+			}
+
+			strcpy(ret_imform->input_path, input_path);
+		}
+
+		size_t output_path_len = strlen(output_path);
+		if (output_path_len)
+		{
+			ret_imform->output_path = (char*)malloc(output_path_len);
+
+			if (!ret_imform->output_path)
+			{
+				// HANDLE ERROR
+			}
+
+			strcpy(ret_imform->output_path, output_path);
+		}
+	}
+
+	// clone bytestream.
+	if (bytestream_size)
+	{
+		ret_imform->bytestream_size = bytestream_size;
+		ret_imform->prog_bytestream = (u8*)malloc(bytestream_size);
+
+		if (!ret_imform->prog_bytestream)
+		{
+			// HANDLE ERROR
+		}
+
+		memcpy(ret_imform->prog_bytestream, prog_bytestream, bytestream_size);
+	}
+
+	// clone remaining variables.
+	ret_imform->symbols_kept           = symbols_kept;
+	ret_imform->mdata_byte_serialised  = mdata_byte_serialised;
+	ret_imform->symtab_byte_serialised = symtab_byte_serialised;
+	ret_imform->instrs_byte_serialised = instrs_byte_serialised;
+	ret_imform->imform_file_written    = imform_file_written;
+
+	return ret_imform;
+}
+
+void
+IMForm::
+merge_imform(ImportCard* import_card)
+{
+	IMForm* src_imform = import_card->imform;
+
+	// merge src_imform's symtab with this->symtab's.
+	// except the atomic symbols obviously.
+	symtab->import_symtab(src_imform);
+
+	// so insert a cloned version of each instr of src_imform
+	// starting at target_index(technically infront of target_index).
+	InstrBlock* cloned_instr;
+	for (u32 i = 0; i < src_imform->instr_vec->size(); i++)
+	{
+		cloned_instr = src_imform->instr_vec->at(i)->make_clone();
+		instr_vec->insert(instr_vec->begin() + (import_card->insertion_index + i), cloned_instr);
+	}
+			
+	// traverse instr_vec so we can update the instr-block's instr_num.
+	for (u32 inum = 0; inum < instr_vec->size(); inum++)
+		instr_vec->at(inum)->instr_num = inum;
+
+	// set all flags to notify that the current outputs aren't valid.
+	ibvec_changed          = true;
+	mdata_byte_serialised  = false;
+	symtab_byte_serialised = false;
+	instrs_byte_serialised = false;
+	imform_file_written    = false;
+}
+
 
 u32
 IMForm::
@@ -376,6 +523,15 @@ print_metadata_bytestream(u8* _bytestream)
 
 	printf("\naddr: %u    :: value: %u (creation-date) decoded: %s", get_ram_addr(_bytestream, bf), (*(u32*)bf), decode_datestamp((*(u32*)bf)) );
 	bf += UINT_SIZE;
+}
+
+void
+IMForm::
+register_fileid(char* _id)
+{
+	size_t idlen = strlen(_id);
+	fileid = (char*)malloc(idlen + 1);
+	strcpy(fileid, _id);
 }
 
 void
@@ -564,13 +720,17 @@ IMForm::
 write_instrs_to_bytes(u8* buffer)
 {
 	u8* bf = buffer;
+	InstrBlock* instr;
 
 	for (u32 i = 0; i < instr_vec->size(); i++)
 	{ 
- 		instr_vec->at(i)->serialise(bf);
+		instr = instr_vec->at(i);
+		instr->ram_addr = get_ram_addr(prog_bytestream, bf);
+ 		instr->serialise(bf);
 		bf += opsize_tbl[instr_vec->at(i)->opcode];
 	//	printf("\n-<<>> %u, opcode: %u", opsize_tbl[instr_vec->at(i)->opcode], instr_vec->at(i)->opcode);
 	}
+
 	instrs_byte_serialised = true;
 }
 
@@ -826,34 +986,44 @@ read_program_from_bytes(u8* _buf)
 Assembler::
 Assembler(bool* _option_tbl,
 	      char* _input_path,
-	      char* _output_path)
+	      char* _output_path,
+	     size_t _prog_size,
+	     size_t _next_byte_addr)
 :
-	currtok(NULL),
-	currline(NULL),
-	prog_size(0), 
-	toknum(0),
 	input_path(_input_path),
 	output_path(_output_path),
 	prog_bytestream(NULL),
-	output_file(NULL),
-	bufptr(NULL),
-	input_file(NULL),
 	bytestream_size(0),
-	main_retval(0),
 	next_byte_addr(0),
-	instr_count(0)
+	output_file(NULL),
+	input_file(NULL),
+	in_fileid(NULL),
+	currline(NULL),
+	instr_count(0),
+	main_retval(0),
+	currtok(NULL),
+	bufptr(NULL),
+	prog_size(0),
+	toknum(0)
 {
+	// pull in-fileid from input-path.
+	in_fileid = get_fileid_win32(input_path, INPUT_FILE_EXTENSION);
+
 	// copy option-table.
 	for (int i = 0; i < ASM_ARGV_OPT_COUNT; i++)
 		option_tbl[i] = _option_tbl[i];
 
 	try
 	{
-		resolver       = new OperandResolver(this);
-		parser         = new Parser();
-		imform         = new IMForm();
+		resolver    = new OperandResolver(this);
+		import_list = new std::vector<ImportCard*>();
+		parser      = new Parser();
+
+		imform = new IMForm();
+		imform->build_infdata(input_path);
 		imform->symtab = new SymbolTable(option_tbl[KEEP_SYMBOLS_OPT]);
 		imform->symbols_kept = option_tbl[KEEP_SYMBOLS_OPT];
+
 		symtab = imform->symtab;
 	}
 
@@ -872,6 +1042,17 @@ Assembler::
 	delete symtab;
 	delete parser;
 	if (imform) delete imform;
+}
+
+
+void
+Assembler::
+merge_import_symbols()
+{
+	for (u32 i = 0; i < import_list->size(); i++)
+		symtab->import_symtab(import_list->at(i)->imform);
+
+	symtab->serial_size();
 }
 
 void
@@ -1014,6 +1195,72 @@ count_uint_operand()
 	}
 }
 
+ImportCard::
+ImportCard(size_t  _insertion_index,
+	       size_t  _insertion_addr,
+	       size_t  _curr_progsize)
+:
+	insertion_index(_insertion_index),
+	insertion_addr(_insertion_addr),
+	curr_progsize(_curr_progsize) {}
+
+
+/* 
+	MODULE-IMPORTATION-EXPLANATION:
+		NOTE: .frt file is synonymous with the term "module".
+
+		first understand that the first-pass on a module builds it's
+		symtab & determines that size of the module when assembled in memory.
+
+		importation is simple on one hand, we simply build the module's imform
+		then merge that imform into the main-module's imform at the correct index.
+
+		importation is complicated by all the module's addresses. in an .frt file
+		the addresses are all relevent to the first instruction. instruction #1's
+		opcode is at address 0.
+
+		this works fine because this file will be assembled into a .fbin file which
+		will have a metadata segment and possibly it's symbol-table proceeding that,
+		*then* the first instruction's opcode. at this point all the addresses within
+		the .frt file's symtab are all out by the size of metadata-segment + symtab size.
+
+		so we go through the symtab and simply add (metadata-size + symtab-size) to each
+		address bringing them all where they should be.
+
+		this works perfect right up until we try to import other .frt files. importing is
+		basically copy and pasting the program at the import stmt.
+
+		how shall we import/merge other .frt file's into other .frt files?
+		this is my solution:
+
+		each Assembler() object assembles just one module. Assembler() does it's first-pass
+		which handles symbol definitions, determines the memory-size of the module when
+		assembled and processes each import stmt instance. it also keeps track of the
+		next address to be used so as to process label definitions.
+
+		import statement:
+
+		file1.frt:
+			import <dir1/dir2/filename.frt>
+			import <dir1/dir2/filename2.frt>
+			import <dir1/dir2/filenam3.frt>
+
+		each module has a list of import-card objects.
+
+		ImportCard
+		{
+			size_t  insertion_index;
+			size_t  curr_progsize; // prog-size of importer imform at time of import call.
+			IMForm* imform;
+		}
+
+		on the first pass when an import stmt is hit, the next token is the file's path.
+		so another assembler object is created which builds it's imform.
+
+
+		
+*/
+
 // performs the first pass over the input text. 
 // tasks are to verify tokens aren't misplaced 
 // or missing, build all symbols defined within
@@ -1023,8 +1270,10 @@ void
 Assembler::
 first_stage_pass()
 {
-	Symbol* sym = NULL;
-	next_byte_addr = 0;
+	bool option_tbl[ASM_ARGV_OPT_COUNT] = { false };
+	ImportCard* import_card;
+	Assembler* import_asm;
+	Symbol* sym;
 	toknum = 0;
 
 	while (toknum < parser->tokcount)
@@ -1047,17 +1296,8 @@ first_stage_pass()
 				switch (currtok->val.ubyteval)
 				{
 					// one uint operand instructions.
-				case perr_op:
-				case systime_op:
-				case htime_op:
-				case getutc_op:
-				case getlocal_op:
-				case delay_op:
-				case waituntil_op:
-				case elapsed_op:
-				case getweekday_op:
-				case monthdays_op:
-				case normtime_op:
+				case perr_op: case systime_op: case htime_op: case getutc_op: case getlocal_op: case delay_op:
+				case waituntil_op: case elapsed_op: case getweekday_op: case monthdays_op: case normtime_op:
 				case ftel_op:
 				case rwnd_op:
 				case sputs_op:
@@ -1284,7 +1524,6 @@ first_stage_pass()
 				// point toknum at the first token after the macro-def.
 				toknum++;
 				continue;
-	
 
 			case LABEL_DEF_TOK:
 				// label identifier string is in the label-def-token in it's srcstr var.
@@ -1300,6 +1539,54 @@ first_stage_pass()
 
 				// point toknum at the first token after the label-def.
 				toknum++;
+				continue;
+
+			case IMPORT_DEF_TOK:
+				// get ourselves a ptr to the import's path token.
+				currtok = parser->tokstream->vec->at(++toknum);
+
+				// check for invalid tokens.
+				if (currtok->type != PATH_TOK)
+				{
+					printf("\n major error inside! import path invalid");
+					exit(1);
+				}
+
+				// create import-card and assembler object
+				// for the to-be imported module.
+				try
+				{ 
+					import_card = new ImportCard(instr_count, next_byte_addr, prog_size);
+					import_asm  = new Assembler(option_tbl, currtok->srcstr, (char*)"NO-OUTPUT-PATH", prog_size, next_byte_addr);
+				}
+
+				catch (const std::bad_alloc& e)
+				{
+					throw AssemblerError("\nnew failed in Assembler::first_stage_pass()\n[import_card = new ImportCard();]");
+				}
+
+
+				import_list->push_back(import_card);
+				import_card->imform = import_asm->imform;
+				import_card->imform->Asm = import_asm;
+
+				// parse module into token-stream then do first-pass
+				// on it to calculate size, import modules, build symbol-table.
+				import_asm->parser->parse_file(input_path);
+				import_asm->first_stage_pass(); 
+
+				// each module merges the symtabs of all imported modules in that file.
+				// the main-module simply iterates through the import-list merging each
+				// import-cards symtab with the main-module.
+				import_asm->merge_import_symbols(); 
+
+				prog_size      = import_asm->prog_size;
+				next_byte_addr = import_asm->next_byte_addr;
+
+				import_card->insertion_index = instr_count;
+				instr_count += import_asm->instr_count;
+
+				toknum++; // increment toknum past the path token. then continue.
 				continue;
 
 			case COMMENT_TOK:
@@ -1747,7 +2034,6 @@ eval_opstack_top()
 		popdel_value();
 		result_node = *valstk_top;
 		result_node->val = result_val;
-		printf("\n -)) %u", result_val.uintval);
 		break;
 	}
 
@@ -1839,6 +2125,14 @@ build_im_form()
 
 		switch (currtok->type)
 		{
+			case IMPORT_DEF_TOK:
+				currtok = parser->tokstream->++toknum;
+				//if (currtok->type != ID_TOK)
+					// THROW ERROR
+
+				++toknum;
+				continue;
+
 			case OPCODE_TOK:
 				// create new instruction block object in im-form object.
 				instr = imform->new_instr(currtok->val.ubyteval);
@@ -2298,11 +2592,17 @@ alloc_bytestream()
 	bytestream_size += symtab->serial_size();
 	bytestream_size += prog_size;
 
+	// add the imported modules size to the main size.
+	for (u32 i = 0; i < import_list->size(); i++)
+		bytestream_size += import_list->at(i)->imform->metadata->prog_size;
+
 	// allocate the program's memory block(prog-bytestream).
 	prog_bytestream = (u8*) malloc(bytestream_size);
 
 	if (!prog_bytestream)
 		throw AssemblerError("\nnew failed in Assembler::alloc_bytestream()\n[prog_bytestream = (u8*) malloc(bytestream_size);]", (u8)AsmErrorCode::PROG_BYTESTREAM_MALLOC);
+
+	imform->prog_bytestream = prog_bytestream;
 }
 
 void
@@ -2354,6 +2654,9 @@ read_prog_from_file(char* input_path_)
 		exit(1);
 	}
 
+	// build imform file-data obj.
+	build_infdata(input_path_);
+
 	size_t file_size;
 	size_t bytes_read;
 
@@ -2384,6 +2687,14 @@ read_prog_from_file(char* input_path_)
 
 	read_program_from_bytes(prog_bytestream + (metadata->first_instr_addr));
 
+}
+
+void
+Assembler::
+merge_import_list()
+{
+	for (u32 i = 0; i < import_list->size(); i++)
+		imform->merge_imform(import_list->at(i));
 }
 
 // Assembly:
@@ -2419,15 +2730,19 @@ assemble_file()
 	// produce a token-stream from the input file.
 	parser->parse_file(input_path);
 
-	// peforms the first pass of the input text, tokens are validated and all symbols created.
-	// program size is also calculated here.
+	// peform the first pass of the input text, tokens are validated and all symbols created.
+	// program size is also calculated here. import-card-table for modules is built here.
+	// for each import stmt an ImportCard is created, containing an insertion index and an
+	// imform() object created from the path-token that came after the import-token.
 	first_stage_pass();
 
-	// allocate the bytestream to hold the assembly output,
-	// triggers first count of symtab object setting its bytestream-size var.
-	alloc_bytestream();
-	imform->prog_bytestream = prog_bytestream;
+	// any modules that a module imports will have their symtab merged with their importer's
+	// symtab. in short: each module's symtab contains the symbols of all imported modules.
+	// at this point, main-module has created it's own symtab it must now merge the symtab
+	// from each import-card in the import-list.
+	merge_import_symbols();
 
+	alloc_bytestream();
 	build_imform_metadata();
 
 	// at this point the entire input text has been processed for symbol declarations.
@@ -2435,9 +2750,13 @@ assemble_file()
 	// all values are resolved, symtab is 100% accurate and complete after finalise() is called.
 	symtab->finalise(prog_bytestream + SYMTAB_DATA_OFFSET, imform);
 
+	// build the core imform for the program.
 	// build intermediate-form which is a vector of instr-block objects.
 	// these objects hold the final information to write an instr to a bytestream.
  	build_im_form();
+
+	// core imform is built now we can insert the import imforms now.
+	merge_import_list();
 
 	// serialise im form to prog-bytestream as per the .fbin memory map.
 	imform->write_prog_to_bytes(prog_bytestream);
@@ -2475,6 +2794,14 @@ assemble_file()
 		printbin(input_path);
 
 	printf("\n\n");
+}
+
+void
+Assembler::
+import_module()
+{
+	parser->parse_file(input_path); // generate token-stream.
+	first_stage_pass();             // calculate size, import modules, build symbol-table.
 }
 
 void

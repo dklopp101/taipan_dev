@@ -7,7 +7,9 @@
 #ifndef ASM_H
 #define ASM_H
 
+#include <unordered_map>
 #include <chrono>
+
 
 #include "symtab.h"
 
@@ -91,6 +93,7 @@
 #define SHOW_DASM_OPT    6
 #define SHOW_BIN_OPT     7
 
+#define PATH_MAX 300
 
 #define ASM_OPERATOR_MAX 200
 #define ASM_VALUE_MAX    200
@@ -228,7 +231,10 @@ InstrBlock
 	void write_operand(const u8 datatype,
 		               const u8 oprnum,
 		                    u8* buff_);
+
+	InstrBlock* make_clone();
 };
+
 
 /*
 	IMFORM STRUCT:
@@ -284,14 +290,21 @@ struct SymbolTable;
 struct
 IMForm
 {
-	MetadataTable* metadata;
-	SymbolTable* symtab;
+	Assembler* Asm;
 	std::vector<InstrBlock*>* instr_vec;
-	char* input_path;
-	char* output_path;
-	u8* prog_bytestream;
+
+	MetadataTable*  metadata;
+	SymbolTable*    symtab;
+	moduleFileData* in_fdata;
+
+	char*  input_path;
+	char*  output_path;
+
+	u8*    prog_bytestream;
 	size_t bytestream_size; // size of prog_bytestream in bytes.
-	bool symbols_kept;
+
+	bool   symbols_kept;
+	bool   ibvec_changed; // if this is true then the current prog_bytestream and stuff are old and need redoing.
 
 	// flags telling if a section has been serialised/
 	// written to prog_bytestream. once all required
@@ -307,6 +320,10 @@ IMForm
 
 	IMForm();
 	~IMForm();
+
+	void build_infdata(char* _path);
+
+	void register_fileid(char* _id);
 
 	void print();
 	u32  get_ram_addr(u8* ram_base, u8* cptr);
@@ -354,6 +371,25 @@ IMForm
 	void read_prog_from_file(char* input_path_);
 
 	void interpret_flags(u8* flagbytes);
+
+	// function for merging another imform into this one.
+	void merge_imform(ImportCard* import_card);
+	 
+	IMForm* make_clone();
+};
+
+struct
+ImportCard
+{
+	size_t  insertion_index; // index of parent module's instr-vector to import imform at.
+	size_t  insertion_addr;
+	size_t  curr_next_addr;
+	size_t  curr_progsize; // prog-size of importer imform at time of import call.
+	IMForm* imform;
+
+	ImportCard(size_t  _insertion_index,
+		       size_t  _insertion_addr,
+		       size_t  _curr_progsize);
 };
 
 /*
@@ -391,7 +427,7 @@ struct
 Assembler
 {
 	OperandResolver* resolver;
-	IMForm*       imform;
+	IMForm*      imform;
 	SymbolTable* symtab;
 	Parser*      parser;
 	size_t       bytestream_size; // prog size in bytes, calculated during token validation.
@@ -410,8 +446,15 @@ Assembler
 	bool         option_tbl[ASM_ARGV_OPT_COUNT];
 	u32          next_byte_addr;
 	int          main_retval;
+	char*        in_fileid; // pretty much the identifier of the file.
 
+	std::vector<ImportCard*>* import_list;
+
+	// build all import imform objects.
+	void merge_import_symbols();
+	void import_module();
 	void first_stage_pass();
+	void merge_import_list();
 	void build_metadata_segment();
 	void write_prog_bytestream();
 	u32  build_flags_u32();
@@ -426,10 +469,11 @@ Assembler
 	void throw_error_here(Token*       token,
              			  const char*  errmsg);
 
-
-	Assembler(bool* _option_tbl,
-		      char* _input_path,
-	          char* _output_path);
+	Assembler(bool*  _option_tbl,
+		      char*  _input_path,
+		      char*  _output_path,
+		      size_t _prog_size = 0,
+		      size_t _next_byte_addr = 0);
 
 	~Assembler();
 };
@@ -522,5 +566,7 @@ void  disbin(const char* input_path);
 void  printbin(const char* input_path);
 void  print_prog_bytestream(u8*    bytestream,
 	                       size_t size);
+
+
 
 #endif // ASM.H

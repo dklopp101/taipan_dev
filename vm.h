@@ -8,6 +8,7 @@
 #ifndef VM_H
 #define VM_H
 
+
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -105,6 +106,7 @@ bool_strings[] =
 #define RECUR_MAX       0x3E8
 #define STACK_SIZE      100000
 #define INSTR_MAX_SIZE  13
+#define FILEID_MAX_LEN  20
 
 #define UBYTE_SIZE      1
 #define UINT_SIZE       4
@@ -130,6 +132,14 @@ bool_strings[] =
 #define INSIDE_UINT8_PADDING_CODE 14
 #define NOSIGN_CODE        15
 #define NOVALUE_CODE       16
+
+// constants relevent to the moduleFileData struct.
+#define PATH_DIR_MAX        20
+
+#define FILEID_BUFFER_SIZE  20
+#define EXT_BUFFER_SIZE     10
+#define DRIVE_BUFFER_SIZE    5
+#define DIR_BUFFER_SIZE    150
 
 static
 const char*
@@ -177,6 +187,549 @@ file_exists(const char* path)
     return retval;
 }
 
+// contains all required name and path related information
+// of an input module for the assembler.
+struct
+moduleFileData
+{
+	char* fullpath;
+	char* fileid;
+	char* ext;
+	char* drive;
+	char* dir;
+
+	moduleFileData(char* _path)
+	{
+		fullpath = (char*)malloc(strlen(_path) + 1);
+		fileid   = (char*)malloc(FILEID_BUFFER_SIZE);
+		ext      = (char*)malloc(EXT_BUFFER_SIZE);
+		drive    = (char*)malloc(DRIVE_BUFFER_SIZE);
+		dir      = (char*)malloc(DIR_BUFFER_SIZE);
+
+		if (!fullpath) throw AssemblerError("\nmalloc failed in moduleFileData::moduleFileData [fullpath = (char*)malloc(strlen(_path) + 1);]");
+		if (!fileid)   throw AssemblerError("\nmalloc failed in moduleFileData::moduleFileData [fileid = (char*)malloc(FILEID_BUFFER_SIZE);]");
+		if (!ext)      throw AssemblerError("\nmalloc failed in moduleFileData::moduleFileData [ext = (char*)malloc(EXT_BUFFER_SIZE);]");
+		if (!drive)    throw AssemblerError("\nmalloc failed in moduleFileData::moduleFileData [drive = (char*)malloc(DRIVE_BUFFER_SIZE);]");
+		if (!dir)      throw AssemblerError("\nmalloc failed in moduleFileData::moduleFileData [dir = (char*)malloc(DIR_BUFFER_SIZE);]");
+
+		strcpy(fullpath, _path);
+		_splitpath(fullpath, drive, dir, fileid, ext);
+
+		fileid = (char*)realloc(fileid, strlen(fileid) + 1);
+		ext    = (char*)realloc(ext, strlen(ext) + 1);
+
+		if (!fileid) throw AssemblerError("\nrealloc failed in moduleFileData::moduleFileData [fileid = (char*)realloc(fileid, strlen(fileid) + 1);]");
+		if (!ext)    throw AssemblerError("\nrealloc failed in moduleFileData::moduleFileData [ext = (char*)realloc(ext, strlen(ext) + 1);]");
+
+		if (strlen(drive))
+		{
+			drive = (char*)realloc(drive, strlen(drive) + 1);
+			if (!drive) throw AssemblerError("\nrealloc failed in moduleFileData::moduleFileData [drive = (char*)realloc(drive, strlen(drive) + 1);]");
+		}
+
+		else
+		{
+			drive = NULL;
+		}
+
+		if (strlen(dir))
+		{
+			dir = (char*)realloc(dir, strlen(dir) + 1);
+			if (!dir) throw AssemblerError("\nrealloc failed in moduleFileData::moduleFileData [dir = (char*)realloc(dir, strlen(dir) + 1);]");
+		}
+
+		else
+		{
+			drive = NULL;
+		}
+	}
+
+	~moduleFileData()
+	{
+		if (fullpath) free(fullpath);
+		if (fileid)   free(fileid);
+		if (ext)      free(ext);
+		if (drive)    free(drive);
+		if (dir)      free(dir);
+	}
+};
+
+//
+// FROM BELOW THIS LINE MARKS REDUNDANT CODE.
+//
+
+// takes a path(with .frt) to an .frt file and returns a
+// path to the local folder.
+//
+// info: local folder refers to the folder of the file
+// being assembled and doing the importing.
+// 
+// take a path to a module: "/next/start.frt", the local
+// path would be this: "/next/". 
+//
+// the local path is used for importing files.
+static
+char*
+get_local_path(char* path)
+{
+	char* ch       = path;
+	u32   pathlen  = strlen(path);
+	u32   pos      = 0;
+
+	// first job is to get a ptr to the first char
+	// of the
+
+	// advance ptr along the path until
+	// the exten's period is hit.
+	while (*(ch++) != '.')
+	{
+		if ((pos++) > pathlen)
+			return 0;
+	}
+
+	// now traverse backwards along the path
+	// until a slash or the beginning of
+	// the string is found.
+	for (;; --ch)
+	{
+		if ((*ch == '/') || (*ch == '\\'))
+			break;
+
+		if (!(--pos))
+			break;
+	}
+
+}
+
+static
+char*
+SPARE_FUNCTION_extract_filename(char* path)
+{
+	char* ch = path;
+	u32   pathlen = strlen(path);
+	u32   pos = 0;
+
+	// first job is to get a ptr to the first char
+	// of the
+
+	// advance ptr along the path until
+	// the exten's period is hit.
+	while (*(ch++) != '.')
+	{
+		if ((pos++) > pathlen)
+			return 0;
+	}
+
+	// now traverse backwards along the path
+	// until a slash or the beginning of
+	// the string is found.
+	for (;; --ch)
+	{
+		if ((*ch == '/') || (*ch == '\\'))
+			break;
+
+		if (!(--pos))
+			break;
+	}
+
+}
+
+// All taipan assembly text files are .frt files.
+// fileid refers to the filename without the extension.
+// race.frt : fileid is "race"
+//
+// get_fileid() returns a string of the fileid within a
+// a file-path. null is returned upon all errors.
+static
+char*
+get_fileid_ANY_PLATFORM(const char* path,
+	       const char* required_extension)
+{
+	const char* exten_ptr = NULL;
+	int exten_len = 0;
+	int pos = -1;
+	int slash_hit = 0;
+	int colon_hit = 0;
+	u32 exten_count = 0;
+	int fileid_found = 0;
+
+	char* retval = (char*)malloc(FILEID_MAX_LEN);
+	if (!retval) return 0;
+
+	// confirm that file-path is at least 3 chars long.
+	if (strlen(path) < 3)
+		goto func_fail;
+
+	// iterate through chars in file-path one by one.
+	do {
+		// check if path is longer then max path len.
+		// increment pos var aferwards.
+		if ((pos++) > 259)
+			goto func_fail;
+
+		switch (*path)
+		{
+			// check for file-extension or '../'
+		case '.':
+			// check if next char is period denoting "../"
+			if ((*(path + 1)) == '.')
+			{
+				// if pos isn't 0 then we have a char before the '.', confirm it's a slash or path is invalid.
+				// eg: "../sfsd/" <- valid, "fssaf../saf/" <- invalid.
+				if (pos)
+				{
+					if ((*(path - 1)) != '/')
+					{
+						if (*(path - 1) != '\\')
+							goto func_fail;
+					}
+				}
+
+				// check if next char after the ".." is a '/' or '\'
+				if ((*(path + 2)) != '/')
+				{
+					if (*(path + 2) != '\\')
+						goto func_fail;
+				}
+
+				// all is well so advance past it the "../"
+				path++;
+				pos++;
+				continue;
+			}
+
+			// '.' char wasn't denoting "../" so it must be a file-extension.
+			// if pos == 0 then we dont have a char before the '.' so path is invalid.
+			if (!pos)
+				goto func_fail;
+
+			// set pointer at start of file extension we it can be checked after loop finishes.
+			// then continue next iteration of loop.
+			exten_ptr = path;
+			continue;
+
+			// these chars are invalid in windows paths and technically valid in unix paths
+			// but strongly discouraged in them, so will be treated as invalid in both.
+		case '<': case '>': case '"': case '|': case '+':
+		case '?': case '*': case '-': case '`': case ',':
+		case '!': case '#': case '$': case '%': case '^':
+		case '&': case '(': case ')': case '=': case ';':
+			goto func_fail;
+
+			// check what platform we're on then check accordingly.
+		case ':':
+#if defined(_WIN32) || defined(_WIN64)
+			// on windows ':' cannot come after a slash.
+			if (slash_hit)
+				goto func_fail;
+
+			// also path can only have 1 ':' so check if already hit one.
+			if (colon_hit)
+				goto func_fail;
+
+			// also cannot be the first char.
+			if (!pos)
+				goto func_fail;
+			// also check if next char is not a slash, which is invalid.
+			if ((*(path + 1)) != '/')
+			{
+				if (*(path + 1) != '\\')
+					goto func_fail;
+			}
+			colon_hit = 1;
+			continue;
+
+#elif defined(__unix__) || defined(__unix) || defined(__APPLE__) && defined(__MACH__)
+			// on unix ':' is treated as a typical valid char.
+			continue;
+#endif
+
+			// if theres a tilde confirm it's the first char.
+		case '~':
+			if (pos)
+				goto func_fail;
+
+		case '\\':
+			// if on unix systems '\' is invalid.
+#if defined(__unix__) || defined(__unix) || defined(__APPLE__) && defined(__MACH__)
+// on unix ':' is treated as a typical char.
+			goto func_fail;
+#endif
+			continue;
+
+		default:
+			// check if we're inside the file extension and count the char so
+			// extension length can be checked after the loop.
+
+			// this is some dirty code we need to just execute on the first
+			// call of this exten_ptr section of code in this switch stmt.
+			//
+			// this dirty code will copy the fileid from a path.
+			if (exten_ptr)
+			{
+				exten_count++;
+				if (exten_count == 1)
+				{
+					char* chb = (char*) path;
+					char* xch = retval;
+
+					// iterate backwards through the string until we
+					// encounter a slash of some kind. "/fileid.frt"
+					// so hitting the slash means we're at the start
+					// of the fileid.
+					for (;; --chb)
+					{
+						// either of these slashes indicate reaching 
+						// beginning of a fileid.
+						if ((*chb == '/') || (*chb == '\\'))
+							break;
+					}
+
+					// increment path ptr so its pointing to first char after the slash.
+					++chb;
+
+					// copy from path var until '.'
+					while (*chb != '.')
+						*(xch++) = *(chb++);
+
+					// null-terminate the return-fileid-string.
+					xch = 0;
+
+					// trim the memory to fit snug.
+					retval = (char*) realloc(retval, strlen(retval) + 1);
+					fileid_found = 1;
+
+					// fileid has been found and neatly packed into a string.
+					// function will complete its main execution now.
+				}
+
+				exten_len++;
+			}
+		}
+	} while (*(++path));
+
+	// check that last char wasn't a period, that there was
+	// an extension in the path and it was at least 1 char long.
+	if ((*(path - 1) != '.') && (exten_ptr && exten_len))
+	{
+		// check if there was a required extension, if not file-path is valid.
+		if (strlen(required_extension))
+		{
+			// check if the file-path's extension matches the required extension.
+			if (strcmp(exten_ptr, required_extension) == 0)
+			{
+				if (fileid_found)
+					return retval;
+
+				goto func_fail;
+
+			}
+
+			else
+				goto func_fail;
+		}
+	}
+
+func_fail:
+	free(retval);
+	return 0;
+}
+
+
+
+// All taipan assembly text files are .frt files.
+// fileid refers to the filename without the extension.
+// race.frt : fileid is "race"
+//
+// get_fileid() returns a string of the fileid within a
+// a file-path. null is returned upon all errors.
+static
+char*
+get_fileid_win32(const char* path,
+	const char* required_extension)
+{
+	const char* exten_ptr = NULL;
+	int exten_len = 0;
+	int pos = -1;
+	int slash_hit = 0;
+	int colon_hit = 0;
+	u32 exten_count = 0;
+	int fileid_found = 0;
+
+	char* retval = (char*)malloc(FILEID_MAX_LEN);
+	if (!retval) return 0;
+
+	// confirm that file-path is at least 3 chars long.
+	if (strlen(path) < 3)
+		goto func_fail;
+
+	// iterate through chars in file-path one by one.
+	do {
+		// check if path is longer then max path len.
+		// increment pos var aferwards.
+		if ((pos++) > 259)
+			goto func_fail;
+
+		switch (*path)
+		{
+			// check for file-extension or '../'
+		case '.':
+			// check if next char is period denoting "../"
+			if ((*(path + 1)) == '.')
+			{
+				// if pos isn't 0 then we have a char before the '.', confirm it's a slash or path is invalid.
+				// eg: "../sfsd/" <- valid, "fssaf../saf/" <- invalid.
+				if (pos)
+				{
+					if ((*(path - 1)) != '/')
+					{
+						if (*(path - 1) != '\\')
+							goto func_fail;
+					}
+				}
+
+				// check if next char after the ".." is a '/' or '\'
+				if ((*(path + 2)) != '/')
+				{
+					if (*(path + 2) != '\\')
+						goto func_fail;
+				}
+
+				// all is well so advance past it the "../"
+				path++;
+				pos++;
+				continue;
+			}
+
+			// '.' char wasn't denoting "../" so it must be a file-extension.
+			// if pos == 0 then we dont have a char before the '.' so path is invalid.
+			if (!pos)
+				goto func_fail;
+
+			// set pointer at start of file extension we it can be checked after loop finishes.
+			// then continue next iteration of loop.
+			exten_ptr = path;
+			continue;
+
+			// these chars are invalid in windows paths and technically valid in unix paths
+			// but strongly discouraged in them, so will be treated as invalid in both.
+		case '<': case '>': case '"': case '|': case '+':
+		case '?': case '*': case '-': case '`': case ',':
+		case '!': case '#': case '$': case '%': case '^':
+		case '&': case '(': case ')': case '=': case ';':
+			goto func_fail;
+
+		case ':':
+			// on windows ':' cannot come after a slash.
+			if (slash_hit)
+				goto func_fail;
+
+			// also path can only have 1 ':' so check if already hit one.
+			if (colon_hit)
+				goto func_fail;
+
+			// also cannot be the first char.
+			if (!pos)
+				goto func_fail;
+			// also check if next char is not a slash, which is invalid.
+			if ((*(path + 1)) != '/')
+			{
+				if (*(path + 1) != '\\')
+					goto func_fail;
+			}
+
+			colon_hit = 1;
+			continue;
+
+			// if theres a tilde confirm it's the first char.
+		case '~':
+			if (pos)
+				goto func_fail;
+
+		case '\\':
+			continue;
+
+		default:
+			// check if we're inside the file extension and count the char so
+			// extension length can be checked after the loop.
+
+			if (exten_ptr)
+			{
+				exten_count++;
+				if (exten_count == 1)
+				{
+					char* pbf = (char*)path;
+					char* rbf = retval;
+
+					// iterate backwards through the string until we
+					// encounter a slash of some kind. "/fileid.frt"
+					// so hitting the slash means we're at the start
+					// of the fileid.
+					for (;; --pbf)
+					{
+						// either of these slashes indicate reaching 
+						// beginning of a fileid.
+
+						if ((*pbf == '/') || (*pbf == '\\'))
+							break;
+					}
+
+					// increment path ptr so its pointing to first char after the slash.
+					++pbf;
+
+					// copy from path var until '.'
+					while (*pbf != '.')
+						*(rbf++) = *(pbf++);
+
+					// null-terminate the return-fileid-string.
+					rbf = 0;
+
+					// trim the memory to fit snug.
+					retval = (char*)realloc(retval, strlen(retval) + 1);
+					fileid_found = 1;
+
+					// fileid has been found and neatly packed into a string.
+					// function will complete its main execution now.
+				}
+
+				exten_len++;
+			}
+		}
+	} while (*(++path));
+
+	// check that last char wasn't a period, that there was
+	// an extension in the path and it was at least 1 char long.
+	if ((*(path - 1) != '.') && (exten_ptr && exten_len))
+	{
+		// check if there was a required extension, if not file-path is valid.
+		if (strlen(required_extension))
+		{
+			// check if the file-path's extension doesn't
+			// match the required extension.
+			if (strcmp(exten_ptr, required_extension) == 1)
+				goto func_fail;
+		}
+
+		// return the fileid-buffer ptr if fileid
+		// found if not found goto func_fail.
+		if (fileid_found)
+			return retval;
+
+		goto func_fail;
+	}
+
+// "safe" way to fail the function because it
+// will ensure retval is freed.
+func_fail:
+	free(retval);
+	return 0;
+}
+
+//
+// FROM ABOVE THIS LINE MARKS REDUNDANT CODE.
+//
+
+
 // confirms validity of a file-path, set a required_extension(".exe") if needed.
 // if any extension is okay set required_extension to "".
 static
@@ -198,22 +751,27 @@ is_valid_filepath(const char* path, const char* required_extension)
         // increment pos var aferwards.
         if ((pos++) > 259) return 0;
 
-        switch (*path) {
+        switch (*path)
+		{
             // check for file-extension or '../'
             case '.':
                 // check if next char is period denoting "../"
-                if ((*(path + 1)) == '.') {
+                if ((*(path + 1)) == '.')
+				{
                     // if pos isn't 0 then we have a char before the '.', confirm it's a slash or path is invalid.
                     // eg: "../sfsd/" <- valid, "fssaf../saf/" <- invalid.
-                    if (pos) {
-                        if ((*(path - 1)) != '/') {
+                    if (pos)
+					{
+                        if ((*(path - 1)) != '/')
+						{
                             if (*(path - 1) != '\\')
                                 return 0;
                         }
                     }
 
                     // check if next char after the ".." is a '/' or '\'
-                    if ((*(path + 2)) != '/') {
+                    if ((*(path + 2)) != '/')
+					{
                         if (*(path + 2) != '\\')
                             return 0;
                     }
@@ -251,7 +809,8 @@ is_valid_filepath(const char* path, const char* required_extension)
                 // also cannot be the first char.
                 if (!pos) return 0;
                 // also check if next char is not a slash, which is invalid.
-                if ((*(path + 1)) != '/') {
+                if ((*(path + 1)) != '/')
+				{
                     if (*(path + 1) != '\\')
                         return 0;
                 }
@@ -285,9 +844,11 @@ is_valid_filepath(const char* path, const char* required_extension)
 
     // check that last char wasn't a period, that there was
     // an extension in the path and it was at least 1 char long.
-    if ((*(path - 1) != '.') && (exten_ptr && exten_len)) {
+    if ((*(path - 1) != '.') && (exten_ptr && exten_len))
+	{
         // check if there was a required extension, if not file-path is valid.
-        if (strlen(required_extension)) {
+        if (strlen(required_extension))
+		{
             // check if the file-path's extension matches the required extension.
             return strcmp(exten_ptr, required_extension) == 0;
         }

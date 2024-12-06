@@ -435,7 +435,6 @@ tokenize_line()
 {
 	bool   notFirstIter = false;
 	bool   commentWasDelim = false;
-	bool   last_ch_ws = false;
 	bool   isLastTok = false;
 	char* ch = linebuf; // line cursor.
 	char* tbch = NULL; // tokbuf cursor / temporary holding ptr for tok line-string.
@@ -467,8 +466,6 @@ tokenize_line()
 		// process digits.
 		if (isdigit(*ch))
 		{
-			last_ch_ws = false;
-
 			switch (toktype)
 			{
 			case NO_TOK:
@@ -483,6 +480,7 @@ tokenize_line()
 					{ // is it hex?
 						if ((toktype == SIGNED_TOK) || (toktype == NO_TOK))
 							toktype = HEX_TOK;
+
 						else
 							toktype = UHEX_TOK;
 					}
@@ -490,6 +488,7 @@ tokenize_line()
 					else if (isdigit(*(ch + 1))) {// is it oct-tok?
 						if ((toktype == SIGNED_TOK) || (toktype == NO_TOK))
 							toktype = OCT_TOK;
+
 						else
 							toktype = UOCT_TOK;
 					}
@@ -498,6 +497,7 @@ tokenize_line()
 					{ // must be a real-tok because no other signed/unsigned tok can start with 0.
 						if ((toktype == SIGNED_TOK) || (toktype == NO_TOK))
 							toktype = REAL_TOK;
+
 						else
 							toktype = UREAL_TOK;
 					}
@@ -510,9 +510,9 @@ tokenize_line()
 
 					if (toktype == SIGNED_TOK)
 						toktype = INT_TOK;
+
 					else if (toktype == NO_TOK)
 						toktype = UINT_TOK;
-
 				}
 
 				break;
@@ -538,8 +538,6 @@ tokenize_line()
 		// process alphabetical chars.
 		if (isalpha(*ch))
 		{
-			last_ch_ws = false;
-
 			switch (toktype)
 			{
 				// if we dont have toktype yet then we have first char of id tok.
@@ -548,6 +546,7 @@ tokenize_line()
 				toktype = ID_TOK;
 				tokcol = linepos;
 
+			case PATH_TOK:
 			case ID_TOK: // if in id or comment tok append char to tok.
 				*tbch++ = *ch;
 				continue;
@@ -621,26 +620,16 @@ tokenize_line()
 			linepos += tab_width_offset;
 
 		case ' ':
-			last_ch_ws = true;
 			if (toktype) goto finalise_tok; // have we found delimiter of current tok?
 			continue; // no tok so continue parsing next ch of line.
 
 		case '_':
-			last_ch_ws = false;
-
 			switch (toktype)
 			{
 				// cannot have '_' in *any* numeric tok.
-			case UINT_TOK:
-			case INT_TOK:
-			case UBYTE_TOK:
-			case ADDR_TOK:
-			case REAL_TOK:
-			case UREAL_TOK:
-			case HEX_TOK:
-			case UHEX_TOK:
-			case OCT_TOK:
-			case UOCT_TOK:
+			case UINT_TOK: case INT_TOK:  case UBYTE_TOK:
+			case ADDR_TOK: case REAL_TOK: case UREAL_TOK:
+			case HEX_TOK:  case UHEX_TOK: case OCT_TOK: case UOCT_TOK:
 				free(tokbuf);
 				throw inputTextError(linenum, linepos, linebuf, "syntax error.");
 
@@ -648,6 +637,7 @@ tokenize_line()
 				toktype = ID_TOK;
 				tokcol = linepos;
 
+			case PATH_TOK:
 			case ID_TOK:
 				*tbch++ = *ch;
 				continue;
@@ -665,9 +655,6 @@ tokenize_line()
 				toktype = UREAL_TOK;
 				break;
 
-			case REAL_TOK:
-				break;
-
 				// '.' cannot be in any of these toks.
 			case MACRO_DEF_TOK:
 			case LABEL_DEF_TOK:
@@ -678,7 +665,6 @@ tokenize_line()
 			case INT_TOK:
 			case UBYTE_TOK:
 			case ADDR_TOK:
-			case ID_TOK:
 				free(tokbuf);
 				throw inputTextError(linenum, linepos, linebuf, "syntax error.");
 
@@ -689,6 +675,7 @@ tokenize_line()
 				break;
 			}
 
+			// id, path & real-tokens fall down here by default.
 			*tbch++ = *ch;
 			continue;
 
@@ -706,21 +693,16 @@ tokenize_line()
 		case UNSIGNED_INT_PREFIX:
 		case ADDR_INT_PREFIX:
 		case REAL_PREFIX:
-			last_ch_ws = false;
-
 			if (toktype)
 			{
 				free(tokbuf);
 				throw inputTextError(linenum, linepos, linebuf, "syntax error.");
 			}
 
-			last_ch_ws = false;
 			toktype = (u8)*ch;
 			goto finalise_tok;
 
 		case STRING_DELIM:
-			last_ch_ws = false;
-
 			if (toktype)
 			{
 				free(tokbuf);
@@ -736,8 +718,6 @@ tokenize_line()
 			goto finalise_tok;
 
 		case BREAKPOINT_INDICATOR:
-			last_ch_ws = false;
-
 			if (toktype)
 			{
 				free(tokbuf);
@@ -749,27 +729,80 @@ tokenize_line()
 			*tbch++ = *ch;
 			continue;
 
-			// operators:
+		// path strings parsed here.
+		case '<':
+			toktype = PATH_TOK;
+			continue;
+
+		case '>':
+			if (toktype != PATH_TOK)
+			{
+				free(tokbuf);
+				throw inputTextError(linenum, linepos, linebuf, "syntax error, misplaced > symbol");
+			}
+
+			goto finalise_tok;
+
+		// operators:
 		case ';':
 			if (toktype)
 			{
 				--linepos;
 				--ch;
-				goto finalise_tok; // have we found delimiter of current tok?
+			}
+			
+			else
+			{
+				toktype = EXPREND_TOK;
+				*tbch++ = *ch;
 			}
 
-			toktype = EXPREND_TOK;
-			*tbch++ = *ch;
 			goto finalise_tok;
 
-		case '+': case '-': case '*': case '/': case '/%':
-		case '[': case ']': case '(': case ')':
+		case '/':
+			// if not in path drop down with other operator tokens.
+			if (toktype == PATH_TOK)
+			{
+				*tbch++ = *ch;
+				continue;
+			}
+
 			if (toktype)
 			{
 				--linepos;
 				--ch;
 				goto finalise_tok; // have we found delimiter of current tok?
 			}
+
+			else
+			{
+				toktype = (u8)*ch;
+				*tbch++ = *ch;
+				goto finalise_tok;
+			}
+
+		case '\\':
+			// if not in path drop down with other operator tokens.
+			if (toktype == PATH_TOK)
+			{
+				*tbch++ = *ch;
+				continue;
+			}
+
+			else
+			{
+				free(tokbuf);
+				throw inputTextError(linenum, linepos, linebuf, "syntax error.");
+			}
+
+		case '+': case '-': case '*': case '/%': case '[': case ']': case '(': case ')':
+			if (toktype)
+			{
+				--linepos;
+				--ch;
+				goto finalise_tok; // have we found delimiter of current tok?
+			}
+
 			toktype = (u8)*ch;
 			*tbch++ = *ch;
 			goto finalise_tok;
@@ -777,7 +810,6 @@ tokenize_line()
 	}
 
 finalise_tok:
-	// *(tbch++) = '\0'; removed the incrementing, no need i think.
 	*tbch = '\0';
 	toklen = strlen(tokbuf);
 
@@ -803,15 +835,31 @@ finalise_tok:
 			toktype = OPCODE_TOK;
 		}
 
-		if (strcmp(tokbuf, MACRO_DEF_KEYWORD) == 0)
+		else if (strcmp(tokbuf, MACRO_DEF_KEYWORD) == 0)
+		{
 			toktype = MACRO_DEF_TOK;
+		}
+
+		else if (strcmp(tokbuf, IMPORT_DEF_KEYWORD) == 0)
+		{
+			toktype = IMPORT_DEF_TOK;
+		}
 
 		break;
+
+	case PATH_TOK:
+		if (toklen < MIN_PATH_LEN)
+		{
+			free(tokbuf);
+			throw inputTextError(linenum, linepos, linebuf, "syntax error. import path is invalid.");
+		}
+
+		goto create_tok;
 
 		// create uint, int, ubyte, addr & real tokens.
 	case UINT_TOK:
 		toktype = UINT_TOK;
-
+		break;
 	}
 
 	// realloc the tokbuf to trim it to size.

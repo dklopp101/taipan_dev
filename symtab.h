@@ -59,7 +59,9 @@ struct Symbol
 	size_t serialise(u8* buf);
 	void   deserialise(u8* bytestream);
 	size_t serial_size();
+	void   modify_id(char* newid);
 };
+
 
 struct IMForm;
 
@@ -100,6 +102,7 @@ struct SymbolTable
 	void    reset_all();
 	void    create_builtin_symbols();
 	void    resolve_builtin_symbols(IMForm* imform);
+	void    import_symtab(IMForm* srcimf);
 };
 
 #endif // SYMTAB.H

@@ -7,6 +7,25 @@
 
 #include "symtab.h"
 
+
+// this function modifies a symbols
+void
+Symbol::
+modify_id(char* newid)
+{
+	size_t newid_len = strlen(newid);
+
+	//if (!newid_len)
+		// THROW ERROR
+
+	char* newid_buf = (char*)malloc(newid_len);
+	strcpy(newid_buf, newid);
+
+	// now we gotta deal with current id.
+	free(id);
+	id = newid_buf;
+}
+
 Symbol::
 Symbol(size_t _ndx,
 	   u8     _type,
@@ -230,6 +249,83 @@ SymbolTable::
 		delete vec->at(i);
 }
 
+// returns true when successful or false when not.
+void
+SymbolTable::
+import_symtab(IMForm* srcimf)
+{
+
+	SymbolTable* src_symtab = srcimf->symtab;
+	char*        src_fileid = srcimf->in_fdata->fileid;
+
+	Symbol* srcsym;
+	Symbol* newsym;
+	char*   newsym_id;
+
+	for (size_t i = 0; i < src_symtab->vec->size(); i++)
+	{
+		// get a convinience ptr to symbol being imported.
+		srcsym = src_symtab->vec->at(i);
+
+		// skip any atom-symbols. check for it now and not in switch
+		// below to avoid the malloc calls below if possible.
+		if (srcsym->type == ATOM_SYMBOL)
+			continue;
+
+		// importing the src_symtab means creating clones of
+		// each symbol that we want from src_symtab. we then 
+		// keep the clone. the id of the cloned symbol becomes
+		// this: "fileid.original_symid" so all imported symbols
+		// can easy be distinguished.
+		
+		// create fileid symtab id.
+		newsym_id = (char*)malloc(100);
+		if (!newsym_id)
+			throw AssemblerError("\nmalloc error inside symtab->import_symtab() [newsym_id = (char*)malloc(100);]");
+
+		sprintf(newsym_id, "%s.%s", src_fileid, srcsym->id);
+		newsym_id = (char*)realloc(newsym_id, strlen(newsym_id) + 1);
+
+		if (!newsym_id)
+			throw AssemblerError("\nrealloc error inside symtab->import_symtab() [newsym_id = (char*)realloc(newsym_id, strlen(newsym_id) + 1);]");
+
+		// here we will create the cloned-symbol object at newsym.
+		// taking the required action for the different symbol types.
+		switch (srcsym->type)
+		{
+			case LABEL_SYMBOL:
+				newsym = create_new_symbol(LABEL_SYMBOL, newsym_id);
+				newsym->val.uintval = srcsym->val.uintval;
+				newsym->val_type = UINT_TYPE;
+				continue;
+
+			case MACRO_SYMBOL:
+				newsym = create_new_symbol(MACRO_SYMBOL, newsym_id);
+				newsym->val_type = srcsym->val_type;
+
+				switch (srcsym->val_type)
+				{
+				case UINT_TYPE:
+					newsym->val.uintval = srcsym->val.uintval;
+					continue;
+
+				case INT_TYPE:
+					newsym->val.intval = srcsym->val.intval;
+					continue;
+
+				case UBYTE_TYPE:
+					newsym->val.ubyteval = srcsym->val.ubyteval;
+					continue;
+
+				case REAL_TYPE:
+					newsym->val.realval = srcsym->val.realval;
+					continue;
+
+			}
+		}
+	}
+}
+
 void
 SymbolTable::
 reset_all()
@@ -398,7 +494,7 @@ print(bool print_atoms = false)
 {
 	size_t label_count = 0;
 	size_t macro_count = 0;
-	size_t core_count  = 0;
+	size_t atom_count  = 0;
 	size_t total_count = vec->size();
 
 	if (!total_count) return;
@@ -416,8 +512,8 @@ print(bool print_atoms = false)
 				macro_count++;
 				break;
 
-			case CORE_SYMBOL:
-				core_count++;
+			case ATOM_SYMBOL:
+				atom_count++;
 				break;
 		}
 	}
@@ -632,17 +728,21 @@ resolve_all_macros()
 	for (size_t i = 0; i < vec->size(); i++)
 	{
 		sym   = vec->at(i);
-		macro = sym;
-
-		// only interested in symbols with identifiers
-		// as their datatype & values.
+		macro = sym; // keep a ptr to the original symbol being resolved.
+	
+		// only need to resolve symbols that refer to other symbols.
 		if (sym->type != ID_TYPE) continue;
-		
-		// upon leaving this loop below sym will be pointing
-		// at the final Value() object.
+
+		// this loop traces the references back to the actual
+		// source value containing symbol.
+		// eg: x = 1, y = x, t = y, z = t. so we get the z symbol,
+		// lookup it's id, we get t, then we get y, then x finally
+		// giving us actual value. so upon leaving this loop below
+		// sym will be pointing at the final Value() object.
 		u8 ref_level = 0;
 		while (sym->val_type == ID_TYPE)
 		{
+			// check if we're exceeding the reference maximum.
 			if (++ref_level == MACRO_REFERENCE_MAX)
 			{
 				char* errmsg = (char*) malloc(ASMERR_MSG_BUFSIZE);
