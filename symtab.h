@@ -16,6 +16,7 @@
 #define SYMTAB_LABELS_INTRO_INFOSTR "\n label symbols:"
 #define SYMTAB_MACROS_INTRO_INFOSTR "\n\n macro symbols:"
 
+#define SYMBOL_FULLID_MAX_SIZE 100
 
 // symbol type codes.
 #define NO_SYMBOL    0
@@ -98,11 +99,15 @@ struct SymbolTable
 	void    print(bool print_atoms);
 	Value   lookup_symbol_value(const char* _id);
 	Symbol* lookup_symbol(const char* _id);
+
 	bool    id_inuse(char* _id);
+
 	void    reset_all();
 	void    create_builtin_symbols();
 	void    resolve_builtin_symbols(IMForm* imform);
 	void    import_symtab(IMForm* srcimf);
+
+	size_t main_module_serial_size(char* main_fileid);
 };
 
 #endif // SYMTAB.H

@@ -679,8 +679,17 @@ tokenize_line()
 			*tbch++ = *ch;
 			continue;
 
-		case LABEL_DEF_SUFFIX: // if in id tok signals end of tok, otherwise invalid.
-			if (toktype != ID_TOK)
+		// ':' is label-def-suffix & can be in a file-path.
+		// if in id-tok it signals id end, in path just add to tokbuf.
+		// any other situation is an error.
+		case ':':
+			if (toktype == PATH_TOK)
+			{
+				*tbch++ = *ch;
+				continue;
+			}
+
+			else if (toktype != ID_TOK)
 			{
 				free(tokbuf);
 				throw inputTextError(linenum, linepos, linebuf, "syntax error.");

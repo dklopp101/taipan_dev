@@ -194,12 +194,31 @@ Node(OperandResolver* _resolver,
 		if (_owner_tok->type == ID_TOK)
 		{
 			// check if left operand is coming from a identifier.
-			if (!(resolver->asmobj->symtab->id_inuse(parent_tok->srcstr)))
-				resolver->asmobj->throw_error_here(parent_tok, "identifier doesn't match any symbols in the symbol-table.");
+			char* _fileid = _resolver->asmobj->imform->in_fdata->fileid;
 
-			// set value node's val var to the symbol's val var.
-			val = resolver->asmobj->symtab->lookup_symbol(parent_tok->srcstr)->val;
-			val_type = resolver->asmobj->symtab->lookup_symbol(parent_tok->srcstr)->val_type;
+			if (strchr(parent_tok->srcstr, '.'))
+			{
+				if (!(resolver->asmobj->symtab->id_inuse(parent_tok->srcstr)))
+					resolver->asmobj->throw_error_here(parent_tok, "identifier doesn't match any symbols in the symbol-table.");
+			
+				// set value node's val var to the symbol's val var.
+				val = resolver->asmobj->symtab->lookup_symbol(parent_tok->srcstr)->val;
+				val_type = resolver->asmobj->symtab->lookup_symbol(parent_tok->srcstr)->val_type;
+			}
+
+			else
+			{
+				char fullid[SYMBOL_FULLID_MAX_SIZE];
+				sprintf(fullid, "%s.%s", _fileid, parent_tok->srcstr);
+
+				if (!(resolver->asmobj->symtab->id_inuse(fullid)))
+					resolver->asmobj->throw_error_here(parent_tok, "identifier doesn't match any symbols in the symbol-table.");
+				
+				// set value node's val var to the symbol's val var.
+				val = resolver->asmobj->symtab->lookup_symbol(fullid)->val;
+				val_type = resolver->asmobj->symtab->lookup_symbol(fullid)->val_type;
+			}
+
 			return;
 		}
 
@@ -472,11 +491,11 @@ merge_imform(ImportCard* import_card)
 		instr_vec->at(inum)->instr_num = inum;
 
 	// set all flags to notify that the current outputs aren't valid.
-	ibvec_changed          = true;
-	mdata_byte_serialised  = false;
-	symtab_byte_serialised = false;
-	instrs_byte_serialised = false;
-	imform_file_written    = false;
+	//ibvec_changed          = true;
+	//mdata_byte_serialised  = false;
+	//symtab_byte_serialised = false;
+	//instrs_byte_serialised = false;
+	//imform_file_written    = false;
 }
 
 
@@ -525,14 +544,14 @@ print_metadata_bytestream(u8* _bytestream)
 	bf += UINT_SIZE;
 }
 
-void
-IMForm::
-register_fileid(char* _id)
-{
-	size_t idlen = strlen(_id);
-	fileid = (char*)malloc(idlen + 1);
-	strcpy(fileid, _id);
-}
+//void
+//IMForm::
+//register_fileid(char* _id)
+//{
+//	size_t idlen = strlen(_id);
+//	fileid = (char*)malloc(idlen + 1);
+//	strcpy(fileid, _id);
+//}
 
 void
 IMForm::
@@ -697,13 +716,8 @@ void
 IMForm::
 write_prog_to_bytes(u8* buffer)
 {
-	u8* bf = buffer;
 	write_metadata_to_bytes(buffer);
-	bf += METADATA_SIZE;
-
 	write_instrs_to_bytes(buffer + metadata->first_instr_addr);
-	bf += metadata->prog_size;
-
 	instrs_byte_serialised = true;
 }
 
@@ -984,20 +998,22 @@ read_program_from_bytes(u8* _buf)
 }
 
 Assembler::
-Assembler(bool* _option_tbl,
-	      char* _input_path,
-	      char* _output_path,
-	     size_t _prog_size,
-	     size_t _next_byte_addr)
+Assembler(bool*      _option_tbl,
+	   	  char*      _input_path,
+		  char*      _output_path,
+	      std::vector<ImportCard*>* _import_list,
+		  size_t     _prog_size,
+		  size_t     _next_byte_addr)
 :
-	input_path(_input_path),
+	import_list(_import_list),
 	output_path(_output_path),
+	input_path(_input_path),
 	prog_bytestream(NULL),
+	is_main_module(false),
 	bytestream_size(0),
 	next_byte_addr(0),
 	output_file(NULL),
 	input_file(NULL),
-	in_fileid(NULL),
 	currline(NULL),
 	instr_count(0),
 	main_retval(0),
@@ -1006,9 +1022,6 @@ Assembler(bool* _option_tbl,
 	prog_size(0),
 	toknum(0)
 {
-	// pull in-fileid from input-path.
-	in_fileid = get_fileid_win32(input_path, INPUT_FILE_EXTENSION);
-
 	// copy option-table.
 	for (int i = 0; i < ASM_ARGV_OPT_COUNT; i++)
 		option_tbl[i] = _option_tbl[i];
@@ -1052,7 +1065,11 @@ merge_import_symbols()
 	for (u32 i = 0; i < import_list->size(); i++)
 		symtab->import_symtab(import_list->at(i)->imform);
 
-	symtab->serial_size();
+	if (is_main_module)
+		symtab->main_module_serial_size(imform->in_fdata->fileid);
+
+	else
+		symtab->serial_size();
 }
 
 void
@@ -1197,11 +1214,9 @@ count_uint_operand()
 
 ImportCard::
 ImportCard(size_t  _insertion_index,
-	       size_t  _insertion_addr,
 	       size_t  _curr_progsize)
 :
 	insertion_index(_insertion_index),
-	insertion_addr(_insertion_addr),
 	curr_progsize(_curr_progsize) {}
 
 
@@ -1296,139 +1311,35 @@ first_stage_pass()
 				switch (currtok->val.ubyteval)
 				{
 					// one uint operand instructions.
-				case perr_op: case systime_op: case htime_op: case getutc_op: case getlocal_op: case delay_op:
-				case waituntil_op: case elapsed_op: case getweekday_op: case monthdays_op: case normtime_op:
-				case ftel_op:
-				case rwnd_op:
-				case sputs_op:
-				case sgets_op:
-				case serr_op:
-				case sdup_op:
-				case call_op:
-				case jmp_op:
-				case jz_op:
-				case jnz_op:
-				case je_op:
-				case jn_op:
-				case jl_op:
-				case jg_op:
-				case jls_op:
-				case jgs_op:
-				case pshu_op:
-				case popnu_op:
-				case pshfru_op:
-				case poptru_op:
-				case movtru_op:
-				case stktru_op:
-				case pshi_op:
-				case pshfri_op:
-				case poptri_op:
-				case movtri_op:
-				case stktri_op:
-				case pshr_op:
-				case pshfrr_op:
-				case poptrr_op:
-				case movtrr_op:
-				case stktrr_op:
-				case slen_op:
-				case fcls_op:
+				case perr_op:      case systime_op: case htime_op:      case getutc_op:    case getlocal_op: case waituntil_op: case elapsed_op: case getweekday_op: case monthdays_op: case normtime_op:
+				case delay_op:     case ftel_op:    case rwnd_op:       case sputs_op:     case sgets_op:    case serr_op:      case sdup_op:    case call_op:       case jmp_op:       case jz_op:
+				case jnz_op:       case je_op:      case jn_op:         case jl_op:        case jg_op:       case jls_op:       case jgs_op:     case pshu_op:       case popnu_op:     case pshfru_op:
+				case poptru_op:    case movtru_op:  case stktru_op:     case pshi_op:      case pshfri_op:   case poptri_op:    case movtri_op:  case stktri_op:     case pshr_op:      case pshfrr_op:
+				case poptrr_op:    case movtrr_op:  case stktrr_op:     case slen_op:      case fcls_op:
 					count_uint_operand();
 					continue;
 
 					// three uint operand instructions.
-				case frd_op:
-				case fwr_op:
-				case fprntf_op:
-				case sprntf_op:
-				case sscnf_op:
-				case mcpy_op:
-				case mmov_op:
-				case sncy_op:
-				case snct_op:
-				case mcmp_op:
-				case sncm_op:
-				case mset_op:
+				case frd_op:  case fwr_op:  case fprntf_op: case sprntf_op: case sscnf_op: case sncm_op: case mcpy_op: case mmov_op: case sncy_op:   case snct_op:   case mcmp_op:  case mset_op:
 					count_uint_operand();
 					count_uint_operand();
 					count_uint_operand();
 					continue;
 
 					// two uint operand instructions.
-				case timeadd_op:
-				case timesub_op:
-				case settime_op:
-				case tstampstr_op:
-				case cmptime_op:
-				case timediff_op:
-				case fopn_op:
-				case fsk_op:
-				case prntf_op:
-				case scnf_op:
-				case fgts_op:
-				case fpts_op:
-				case scpy_op:
-				case scat_op:
-				case scmp_op:
-				case schr_op:
-				case srch_op:
-				case sstr_op:
-				case stok_op:
-				case sspn_op:
-				case scspn_op:
-				case sfrm_op:
-				case cpyru_op:
-				case setru_op:
-				case cpyri_op:
-				case setri_op:
-				case cpyrr_op:
-				case setrr_op:
+				case timeadd_op:  case timesub_op: case settime_op: case tstampstr_op: case cmptime_op: case timediff_op: case fopn_op:    case fsk_op:     case prntf_op:     case scnf_op:
+				case fgts_op:     case fpts_op:    case scpy_op:    case scat_op:      case scmp_op:    case schr_op:     case srch_op:    case sstr_op:    case stok_op:      case sspn_op:
+				case scspn_op:    case sfrm_op:    case cpyru_op:   case setru_op:     case cpyri_op:   case setri_op:    case cpyrr_op:   case setrr_op:
 					count_uint_operand();
 					count_uint_operand();
 					continue;
 
 					// no operand instructions.
-				case die_op:
-				case nop_op:
-				case stopprof_op:
-				case startprof_op:
-				case brkp_op:
-				case nspctr_op:
-				case ret_op:
-				case swtch_op:
-				case popu_op:
-				case pop2u_op:
-				case incu_op:
-				case decu_op:
-				case addu_op:
-				case subu_op:
-				case mulu_op:
-				case divu_op:
-				case modu_op:
-				case inci_op:
-				case deci_op:
-				case addi_op:
-				case subi_op:
-				case muli_op:
-				case divi_op:
-				case modi_op:
-				case addr_op:
-				case subr_op:
-				case mulr_op:
-				case divr_op:
-				case modr_op:
-				case sqrt_op:
-				case ceil_op:
-				case floor_op:
-				case sin_op:
-				case cos_op:
-				case tan_op:
-				case powu_op:
-				case pows_op:
-				case powr_op:
-				case absu_op:
-				case abss_op:
-				case absr_op:
-				case fabs_op:
+				case die_op:    case nop_op:   case stopprof_op: case startprof_op: case brkp_op: case nspctr_op: case ret_op:   case swtch_op:    case popu_op:      case pop2u_op:
+				case incu_op:   case decu_op:  case addu_op:     case subu_op:      case mulu_op: case divu_op:   case modu_op:  case inci_op:     case deci_op:      case addi_op:
+				case subi_op:   case muli_op:  case divi_op:     case modi_op:      case addr_op: case subr_op:   case mulr_op:  case divr_op:     case modr_op:      case sqrt_op:
+				case ceil_op:   case floor_op: case sin_op:      case cos_op:       case tan_op:  case powu_op:   case pows_op:  case powr_op:     case absu_op:      case abss_op:
+				case absr_op:   case fabs_op:
 					continue;
 				}
 
@@ -1444,7 +1355,7 @@ first_stage_pass()
 				
 
 				// create the macro symbol object in the symtab.
-				sym = symtab->create_new_symbol(MACRO_SYMBOL, currtok->srcstr);
+				sym = symtab->create_new_symbol(MACRO_SYMBOL, generate_symbol_id(currtok->srcstr));
 
 				// advance to next tok, should be any value token.
 				currtok = parser->tokstream->vec->at(++toknum);
@@ -1526,12 +1437,12 @@ first_stage_pass()
 				continue;
 
 			case LABEL_DEF_TOK:
-				// label identifier string is in the label-def-token in it's srcstr var.
+				// label identifier string is in the label-def-token, in it's srcstr var.
 				if (symtab->id_inuse(currtok->srcstr))
 					throw_error_here(currtok, "symbol with same id already exists");
 
 				// create the label symbol object in the symtab.
-				sym = symtab->create_new_symbol(LABEL_SYMBOL, currtok->srcstr);
+				sym = symtab->create_new_symbol(LABEL_SYMBOL, generate_symbol_id(currtok->srcstr));
 
 				// set the label's address value.
 				sym->val.uintval = next_byte_addr;
@@ -1552,12 +1463,22 @@ first_stage_pass()
 					exit(1);
 				}
 
-				// create import-card and assembler object
-				// for the to-be imported module.
+				// ok at this point i *think* all paths will be abs
+				// but might have to convert to abs, job for another day..
+				//
+				// anyway lets check if module is already on import-list.
+				// if it is simply skip importing it.
+				if (module_is_imported(currtok->srcstr))
+				{
+					toknum++;
+					continue;
+				}
+
+				// create import-card and assembler object for the to-be imported module.
 				try
 				{ 
-					import_card = new ImportCard(instr_count, next_byte_addr, prog_size);
-					import_asm  = new Assembler(option_tbl, currtok->srcstr, (char*)"NO-OUTPUT-PATH", prog_size, next_byte_addr);
+					import_asm  = new Assembler(option_tbl, currtok->srcstr, (char*)"NO-OUTPUT-PATH", import_list, prog_size, next_byte_addr);
+					import_card = new ImportCard(prog_size, next_byte_addr);
 				}
 
 				catch (const std::bad_alloc& e)
@@ -1565,14 +1486,13 @@ first_stage_pass()
 					throw AssemblerError("\nnew failed in Assembler::first_stage_pass()\n[import_card = new ImportCard();]");
 				}
 
-
 				import_list->push_back(import_card);
 				import_card->imform = import_asm->imform;
 				import_card->imform->Asm = import_asm;
 
 				// parse module into token-stream then do first-pass
 				// on it to calculate size, import modules, build symbol-table.
-				import_asm->parser->parse_file(input_path);
+				import_asm->parser->parse_file(import_asm->input_path);
 				import_asm->first_stage_pass(); 
 
 				// each module merges the symtabs of all imported modules in that file.
@@ -2126,7 +2046,7 @@ build_im_form()
 		switch (currtok->type)
 		{
 			case IMPORT_DEF_TOK:
-				currtok = parser->tokstream->++toknum;
+				currtok = parser->tokstream->vec->at(++toknum);
 				//if (currtok->type != ID_TOK)
 					// THROW ERROR
 
@@ -2141,67 +2061,21 @@ build_im_form()
 				switch (currtok->val.ubyteval)
 				{
 					// one uint operand instructions.
-				case perr_op:
-				case systime_op:
-				case htime_op:
-				case getutc_op:
-				case getlocal_op:
-				case delay_op:
-				case waituntil_op:
-				case elapsed_op:
-				case getweekday_op:
-				case monthdays_op:
-				case normtime_op:
-				case ftel_op:
-				case rwnd_op:
-				case sputs_op:
-				case sgets_op:
-				case serr_op:
-				case sdup_op:
-				case call_op:
-				case jmp_op:
-				case jz_op:
-				case jnz_op:
-				case je_op:
-				case jn_op:
-				case jl_op:
-				case jg_op:
-				case jls_op:
-				case jgs_op:
-				case pshu_op:
-				case popnu_op:
-				case pshfru_op:
-				case poptru_op:
-				case movtru_op:
-				case stktru_op:
-				case pshi_op:
-				case pshfri_op:
-				case poptri_op:
-				case movtri_op:
-				case stktri_op:
-				case pshr_op:
-				case pshfrr_op:
-				case poptrr_op:
-				case movtrr_op:
-				case stktrr_op:
-				case slen_op:
-				case fcls_op:
+				case perr_op:      case systime_op: case htime_op:      case getutc_op:    case getlocal_op:
+				case waituntil_op: case elapsed_op: case getweekday_op: case monthdays_op: case normtime_op:
+				case delay_op:     case ftel_op:    case rwnd_op:       case sputs_op:     case sgets_op:
+				case serr_op:      case sdup_op:    case call_op:       case jmp_op:       case jz_op:
+				case jnz_op:       case je_op:      case jn_op:         case jl_op:        case jg_op:
+				case jls_op:       case jgs_op:     case pshu_op:       case popnu_op:     case pshfru_op:
+				case poptru_op:    case movtru_op:  case stktru_op:     case pshi_op:      case pshfri_op:
+				case poptri_op:    case movtri_op:  case stktri_op:     case pshr_op:      case pshfrr_op:
+				case poptrr_op:    case movtrr_op:  case stktrr_op:     case slen_op:      case fcls_op:
 					resolver->resolve_uint_operand(instr, 1);
 					break;
 
 					// three uint operand instructions.
-				case frd_op:
-				case fwr_op:
-				case fprntf_op:
-				case sprntf_op:
-				case sscnf_op:
-				case mcpy_op:
-				case mmov_op:
-				case sncy_op:
-				case snct_op:
-				case mcmp_op:
-				case sncm_op:
-				case mset_op:
+				case frd_op:  case fwr_op:  case fprntf_op: case sprntf_op: case sscnf_op: case sncm_op:
+				case mcpy_op: case mmov_op: case sncy_op:   case snct_op:   case mcmp_op:  case mset_op:
 					resolver->resolve_uint_operand(instr, 1);
 					toknum--;
 					resolver->resolve_uint_operand(instr, 2);
@@ -2210,31 +2084,11 @@ build_im_form()
 					break;
 
 					// two uint operand instructions.
-				case timeadd_op:
-				case timesub_op:
-				case settime_op:
-				case tstampstr_op:
-				case cmptime_op:
-				case timediff_op:
-				case fopn_op:
-				case fsk_op:
-				case prntf_op:
-				case scnf_op:
-				case fgts_op:
-				case fpts_op:
-				case scpy_op:
-				case scat_op:
-				case scmp_op:
-				case schr_op:
-				case srch_op:
-				case sstr_op:
-				case stok_op:
-				case sspn_op:
-				case scspn_op:
-				case sfrm_op:
-				case cpyru_op:
-				case setru_op:
-				case cpyri_op:
+				case timeadd_op:  case timesub_op: case settime_op: case tstampstr_op: case cmptime_op:
+				case timediff_op: case fopn_op:    case fsk_op:     case prntf_op:     case scnf_op:
+				case fgts_op:     case fpts_op:    case scpy_op:    case scat_op:      case scmp_op:
+				case schr_op:     case srch_op:    case sstr_op:    case stok_op:      case sspn_op:
+				case scspn_op:    case sfrm_op:    case cpyru_op:   case setru_op:     case cpyri_op:
 				case setri_op:
 				case cpyrr_op:
 				case setrr_op:
@@ -2243,48 +2097,15 @@ build_im_form()
 					break;
 
 					// no operand instructions.
-				case die_op:
-				case nop_op:
-				case stopprof_op:
-				case startprof_op:
-				case brkp_op:
-				case nspctr_op:
-				case ret_op:
-				case swtch_op:
-				case popu_op:
-				case pop2u_op:
-				case incu_op:
-				case decu_op:
-				case addu_op:
-				case subu_op:
-				case mulu_op:
-				case divu_op:
-				case modu_op:
-				case inci_op:
-				case deci_op:
-				case addi_op:
-				case subi_op:
-				case muli_op:
-				case divi_op:
-				case modi_op:
-				case addr_op:
-				case subr_op:
-				case mulr_op:
-				case divr_op:
-				case modr_op:
-				case sqrt_op:
-				case ceil_op:
-				case floor_op:
-				case sin_op:
-				case cos_op:
-				case tan_op:
-				case powu_op:
-				case pows_op:
-				case powr_op:
-				case absu_op:
-				case abss_op:
-				case absr_op:
-				case fabs_op:
+				case die_op:    case nop_op:   case stopprof_op: case startprof_op: case brkp_op:
+				case nspctr_op: case ret_op:   case swtch_op:    case popu_op:      case pop2u_op:
+				case incu_op:   case decu_op:  case addu_op:     case subu_op:      case mulu_op:
+				case divu_op:   case modu_op:  case inci_op:     case deci_op:      case addi_op:
+				case subi_op:   case muli_op:  case divi_op:     case modi_op:      case addr_op:
+				case subr_op:   case mulr_op:  case divr_op:     case modr_op:      case sqrt_op:
+				case ceil_op:   case floor_op: case sin_op:      case cos_op:       case tan_op:
+				case powu_op:   case pows_op:  case powr_op:     case absu_op:      case abss_op:
+				case absr_op:   case fabs_op:
 					++toknum; // make sure toknum is pointing at the next token.
 					break;
 				}
@@ -2725,7 +2546,7 @@ merge_import_list()
 //  * next all of the specified optional tasks are performed.
 void
 Assembler::
-assemble_file()
+assemble_main_module()
 {
 	// produce a token-stream from the input file.
 	parser->parse_file(input_path);
@@ -2749,6 +2570,7 @@ assemble_file()
 	// finalise the symtab which serialises it and calculates all the address offets ect.
 	// all values are resolved, symtab is 100% accurate and complete after finalise() is called.
 	symtab->finalise(prog_bytestream + SYMTAB_DATA_OFFSET, imform);
+	imform->symtab_byte_serialised = true;
 
 	// build the core imform for the program.
 	// build intermediate-form which is a vector of instr-block objects.
@@ -2915,7 +2737,7 @@ print_option_tbl(int argc, char* argv[], bool* option_tbl, bool* option_tbl_reco
 // main() has to be moved to another file and assembler recompiled
 // due to DVM needing to use assembler, dvm has it's own main()
 int
-Assembler_main(int argc, char** argv)
+Assembler_main(int argc, char* argv[])
 {
 	Assembler* assembler = NULL;
 	u8  opt = 0;
@@ -2980,8 +2802,9 @@ Assembler_main(int argc, char** argv)
 			}
 		}
 
-		assembler = new Assembler(option_tbl, argv[1], argv[2]);
-		assembler->assemble_file();
+		assembler = new Assembler(option_tbl, argv[1], argv[2], new std::vector<ImportCard*>());
+		assembler->is_main_module = true;
+		assembler->assemble_main_module();
 	}
 
 	catch (inputTextError input_err)
@@ -2992,7 +2815,6 @@ Assembler_main(int argc, char** argv)
 	catch (AssemblerError asm_err)
 	{
 		asm_err.print_errmsg();
-
 	}
 
 	return 0;
@@ -3291,6 +3113,86 @@ print_prog_bytestream(u8* bytestream,
 	}
 
 	printf("\n\n file-size: %zu\n metadata-size: %zu, symtab-size: %zu, prog-size: %zu", size, METADATA_SIZE, symtab_size, prog_size);
+}
+
+bool 
+Assembler::
+module_is_imported(char* _abs_path) const
+{
+	ImportCard* ic = NULL;
+
+	for (size_t i = 0; i < import_list->size(); i++)
+	{
+		ic = import_list->at(i);
+
+		if (strcmp(ic->imform->in_fdata->abspath, _abs_path) == 0)
+			return true;
+	}
+
+	return false;
+}
+
+char*
+Assembler::
+generate_symbol_idOLD(char* _id) const
+{
+	char* retval;
+	// determine if sym-id already has a fileid in it (fileid.symid), meaning
+	// it is a symbol from an imported module, or if it's just a lone symid (symid)
+	// meaning the symbol is from the main-module.
+	//
+	// if we have an imported-symbol, no action is required except
+	// duplicating the string and returning it. if it's a main symbol(no period).
+	// we make it main._id then return.
+
+	// symbol is imported.
+	if (strchr(_id, '.'))
+	{
+		retval = (char*)malloc(strlen(imform->in_fdata->fileid) + strlen(_id) + 2); // 2 for null-term & period.
+		if (!retval)
+			throw AssemblerError("\nmalloc failed in Assembler::generate_symbol_id()\n[retval = (char*)malloc(strlen(imform->in_fdata->fileid) + strlen(_id) + 2);]");
+		sprintf(retval, "%s.%s", imform->in_fdata->fileid, _id);
+	}
+
+	// symbol is main.
+	else
+	{
+		retval = (char*)malloc(strlen(_id) + 6); // 6 for null-term, period and "main".
+		if (!retval)
+			throw AssemblerError("\nmalloc failed in Assembler::generate_symbol_id()\n[retval = (char*)malloc(strlen(_id) + 6);]");
+		sprintf(retval, "main.%s", _id);
+	}
+
+	return retval;
+}
+
+char*
+Assembler::
+generate_symbol_id(char* _id) const
+{
+	char* retval = NULL;
+
+	// if '.' in _id it's an imported identifier so just copy it.
+	if (strchr(_id, '.'))
+	{
+		retval = (char*)malloc(strlen(_id) + strlen(_id) + 1); // 2 for null-term.
+		if (!retval)
+			throw AssemblerError("\nmalloc failed in Assembler::generate_symbol_id()\n[retval = (char*)malloc(strlen(_id) + strlen(_id) + 2);]");
+		sprintf(retval, "%s", _id);
+	}
+
+	// if no '.' in _id then the identifier is from the same module calling the id.
+	// so we just prepend the fildid to it.
+	else
+	{
+		retval = (char*)malloc(strlen(imform->in_fdata->fileid) + strlen(_id) + 2); // 2 for null-term & period.
+		if (!retval)
+			throw AssemblerError("\nmalloc failed in Assembler::generate_symbol_id()\n[retval = (char*)malloc(strlen(imform->in_fdata->fileid) + strlen(_id) + 2);]");
+		sprintf(retval, "%s.%s", imform->in_fdata->fileid, _id);
+
+	}
+
+	return retval;
 }
 
 // quick function to check how assembler is working

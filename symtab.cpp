@@ -283,7 +283,7 @@ import_symtab(IMForm* srcimf)
 		if (!newsym_id)
 			throw AssemblerError("\nmalloc error inside symtab->import_symtab() [newsym_id = (char*)malloc(100);]");
 
-		sprintf(newsym_id, "%s.%s", src_fileid, srcsym->id);
+		sprintf(newsym_id, "%s", srcsym->id);
 		newsym_id = (char*)realloc(newsym_id, strlen(newsym_id) + 1);
 
 		if (!newsym_id)
@@ -518,7 +518,7 @@ print(bool print_atoms = false)
 		}
 	}
 
-	printf("\nsymbol table: \n\t%zu symbols. %zu labels, %zu macros. %zu builtins", total_count, label_count, macro_count, core_count);
+	printf("\nsymbol table: \n\t%zu symbols. %zu labels, %zu macros. %zu builtins", total_count, label_count, macro_count, atom_count);
 
 	if (label_count)
 	{
@@ -542,15 +542,15 @@ print(bool print_atoms = false)
 		}
 	}
 
-	if (print_builtins)
+	if (print_atoms)
 	{
-		if (core_count)
+		if (atom_count)
 		{
 			printf("\n\n built-in core symbols:");
 
 			for (size_t i = 0; i < total_count; i++)
 			{
-				if ((*vec)[i]->type == CORE_SYMBOL)
+				if ((*vec)[i]->type == ATOM_SYMBOL)
 					(*vec)[i]->print();
 			}
 		}
@@ -620,8 +620,26 @@ serial_size()
 
 		for (size_t i = 0; i < vec->size(); i++)
 			bytestream_size += vec->at(i)->serial_size();
+	}
 
-		Symbol* sym = lookup_symbol(START_LABEL_ID);
+	return bytestream_size;
+}
+
+size_t
+SymbolTable::
+main_module_serial_size(char* main_fileid)
+{
+	char main_label_id[SYMBOL_FULLID_MAX_SIZE];
+	sprintf(main_label_id, "%s.main", main_fileid);
+
+	if (keep_symbols)
+	{
+		bytestream_size = sizeof(size_t);
+
+		for (size_t i = 0; i < vec->size(); i++)
+			bytestream_size += vec->at(i)->serial_size();
+
+		Symbol* sym = lookup_symbol(main_label_id);
 
 		if (!sym)
 		{

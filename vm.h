@@ -187,12 +187,45 @@ file_exists(const char* path)
     return retval;
 }
 
+// ALL FILE IO, MEMORY ALLOCATON/DEALLOCATION AND ANY OTHER
+// NON PROGRAM-RUNTIME RELATED ERRORS ARE DEALT WITH BY
+// THROWING AN INSTANCE OF THIS CLASS.
+//
+// -refer to the asmErrorObject defined in parser.h for information
+// on how program-runtime errors are handled. program-runtime errors
+// being input text errors, syntax/token errors ect.
+struct
+	AssemblerError : public std::exception
+{
+	const char* errmsg;
+	const u8    errcode;
+
+	AssemblerError(const char* _msg,
+		const u8    _errcode = 0)
+		:
+		errmsg(_msg),
+		errcode(_errcode) {
+	}
+
+	void
+		runtime_end_err_handler()
+	{
+		std::terminate();
+	}
+
+	void
+		print_errmsg()
+	{
+		printf("\n%s", errmsg);
+	}
+
+};
 // contains all required name and path related information
 // of an input module for the assembler.
 struct
 moduleFileData
 {
-	char* fullpath;
+	char* abspath;
 	char* fileid;
 	char* ext;
 	char* drive;
@@ -200,20 +233,20 @@ moduleFileData
 
 	moduleFileData(char* _path)
 	{
-		fullpath = (char*)malloc(strlen(_path) + 1);
+		abspath = (char*)malloc(strlen(_path) + 1);
 		fileid   = (char*)malloc(FILEID_BUFFER_SIZE);
 		ext      = (char*)malloc(EXT_BUFFER_SIZE);
 		drive    = (char*)malloc(DRIVE_BUFFER_SIZE);
 		dir      = (char*)malloc(DIR_BUFFER_SIZE);
 
-		if (!fullpath) throw AssemblerError("\nmalloc failed in moduleFileData::moduleFileData [fullpath = (char*)malloc(strlen(_path) + 1);]");
+		if (!abspath) throw AssemblerError("\nmalloc failed in moduleFileData::moduleFileData [fullpath = (char*)malloc(strlen(_path) + 1);]");
 		if (!fileid)   throw AssemblerError("\nmalloc failed in moduleFileData::moduleFileData [fileid = (char*)malloc(FILEID_BUFFER_SIZE);]");
 		if (!ext)      throw AssemblerError("\nmalloc failed in moduleFileData::moduleFileData [ext = (char*)malloc(EXT_BUFFER_SIZE);]");
 		if (!drive)    throw AssemblerError("\nmalloc failed in moduleFileData::moduleFileData [drive = (char*)malloc(DRIVE_BUFFER_SIZE);]");
 		if (!dir)      throw AssemblerError("\nmalloc failed in moduleFileData::moduleFileData [dir = (char*)malloc(DIR_BUFFER_SIZE);]");
 
-		strcpy(fullpath, _path);
-		_splitpath(fullpath, drive, dir, fileid, ext);
+		strcpy(abspath, _path);
+		_splitpath(abspath, drive, dir, fileid, ext);
 
 		fileid = (char*)realloc(fileid, strlen(fileid) + 1);
 		ext    = (char*)realloc(ext, strlen(ext) + 1);
@@ -246,7 +279,7 @@ moduleFileData
 
 	~moduleFileData()
 	{
-		if (fullpath) free(fullpath);
+		if (abspath) free(abspath);
 		if (fileid)   free(fileid);
 		if (ext)      free(ext);
 		if (drive)    free(drive);
@@ -869,39 +902,6 @@ count_digits(i64 num)
     for (; (num /= 10) != 0; count++);
     return count;
 }
-
-
-// ALL FILE IO, MEMORY ALLOCATON/DEALLOCATION AND ANY OTHER
-// NON PROGRAM-RUNTIME RELATED ERRORS ARE DEALT WITH BY
-// THROWING AN INSTANCE OF THIS CLASS.
-//
-// -refer to the asmErrorObject defined in parser.h for information
-// on how program-runtime errors are handled. program-runtime errors
-// being input text errors, syntax/token errors ect.
-struct
-AssemblerError : public std::exception
-{
-	const char* errmsg;
-	const u8    errcode;
-
-	AssemblerError(const char* _msg,
-		           const u8    _errcode = 0)
-	: 
-	errmsg(_msg),
-	errcode(_errcode) {}
-
-	void
-	runtime_end_err_handler()
-	{
-		std::terminate();
-	}
-	
-	void
-	print_errmsg()
-	{
-		printf("\n%s", errmsg);
-	}
-};
 
 static
 size_t

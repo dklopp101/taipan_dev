@@ -286,6 +286,8 @@ InstrBlock
 */
 
 struct SymbolTable;
+struct ImportCard;
+struct Assembler;
 
 struct
 IMForm
@@ -323,7 +325,7 @@ IMForm
 
 	void build_infdata(char* _path);
 
-	void register_fileid(char* _id);
+	//void register_fileid(char* _id); // FILED TO BE CLEARED CUNT
 
 	void print();
 	u32  get_ram_addr(u8* ram_base, u8* cptr);
@@ -374,7 +376,7 @@ IMForm
 
 	// function for merging another imform into this one.
 	void merge_imform(ImportCard* import_card);
-	 
+
 	IMForm* make_clone();
 };
 
@@ -382,13 +384,11 @@ struct
 ImportCard
 {
 	size_t  insertion_index; // index of parent module's instr-vector to import imform at.
-	size_t  insertion_addr;
 	size_t  curr_next_addr;
 	size_t  curr_progsize; // prog-size of importer imform at time of import call.
 	IMForm* imform;
 
 	ImportCard(size_t  _insertion_index,
-		       size_t  _insertion_addr,
 		       size_t  _curr_progsize);
 };
 
@@ -423,10 +423,13 @@ ImportCard
 	the latter 2 
 
 	*/
+
 struct
 Assembler
 {
 	OperandResolver* resolver;
+	Assembler*       base_asm;
+
 	IMForm*      imform;
 	SymbolTable* symtab;
 	Parser*      parser;
@@ -446,9 +449,13 @@ Assembler
 	bool         option_tbl[ASM_ARGV_OPT_COUNT];
 	u32          next_byte_addr;
 	int          main_retval;
-	char*        in_fileid; // pretty much the identifier of the file.
+	bool         is_main_module;
 
-	std::vector<ImportCard*>* import_list;
+	std::vector<ImportCard*>* import_list; // each asm unit only has one import-list.
+
+	char* generate_symbol_id(char* _id) const;
+	char* generate_symbol_idOLD(char* _id) const;
+	bool  module_is_imported(char* _fileid) const;
 
 	// build all import imform objects.
 	void merge_import_symbols();
@@ -460,7 +467,7 @@ Assembler
 	u32  build_flags_u32();
 	void count_uint_operand();
 	void build_im_form();
-	void assemble_file();
+	void assemble_main_module();
 	void alloc_bytestream();
 	void reset_all(bool reset_symtab);
 	void build_imform_metadata();
@@ -469,11 +476,12 @@ Assembler
 	void throw_error_here(Token*       token,
              			  const char*  errmsg);
 
-	Assembler(bool*  _option_tbl,
-		      char*  _input_path,
-		      char*  _output_path,
-		      size_t _prog_size = 0,
-		      size_t _next_byte_addr = 0);
+	Assembler(bool*       _option_tbl,
+		      char*       _input_path,
+		      char*       _output_path,
+              std::vector<ImportCard*>* _import_list,
+		      size_t      _prog_size = 0,
+		      size_t      _next_byte_addr = 0);
 
 	~Assembler();
 };
@@ -553,7 +561,7 @@ void print_option_tbl(int   argc,
 					  bool* option_tbl,
 					  bool* option_tbl_record);
 
-int  Assembler_main(int    argc, char* argv[]);
+int  Assembler_main(int argc, char* argv[]);
 
 
 
